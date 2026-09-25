@@ -14,15 +14,15 @@ using OpenAI;
 using Redis.Iris.AgentMemory;
 
 var command = args.FirstOrDefault()?.ToLowerInvariant() ?? "full";
-if (command is not ("teach" or "recall" or "full"))
+if (command is not ("teach" or "recall" or "full" or "clear"))
 {
-    throw new ArgumentException("Usage: dotnet run --project samples/RedisIrisPersistentAgent -- [teach|recall|full]");
+    throw new ArgumentException("Usage: dotnet run --project samples/RedisIrisPersistentAgent -- [teach|recall|full|clear]");
 }
 
 var irisEndpoint = Required("REDIS_IRIS_ENDPOINT");
 var irisStoreId = Required("REDIS_IRIS_STORE_ID");
 var irisApiKey = Required("REDIS_IRIS_API_KEY");
-var openAiApiKey = Required("OPENAI_API_KEY");
+var openAiApiKey = command == "clear" ? string.Empty : Required("OPENAI_API_KEY");
 var ownerId = Environment.GetEnvironmentVariable("SAMPLE_OWNER_ID") ?? "redis-iris-demo-shopper";
 var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4.1-mini";
 var promotionTimeout = TimeSpan.FromMinutes(ParsePositiveDouble("REDIS_IRIS_PROMOTION_TIMEOUT_MINUTES", 8));
@@ -31,7 +31,14 @@ var showTelemetry = ParseBoolean("REDIS_IRIS_DEMO_TELEMETRY", false);
 
 using var telemetry = showTelemetry ? StartConsoleTelemetry() : null;
 Console.WriteLine("=== Redis Iris Agent Memory + Microsoft Agent Framework ===");
-Console.WriteLine($"Mode: {command}; Owner: {ownerId}; Model: {model}; Short-term window: {shortTermWindow} messages\n");
+Console.WriteLine($"Mode: {command}; User/owner ID: {ownerId}; Model: {model}; Short-term window: {shortTermWindow} messages\n");
+
+if (command == "clear")
+{
+    await ClearOwnerMemoriesAsync();
+    Console.WriteLine("=== Demo complete ===");
+    return;
+}
 
 if (command is "teach" or "full")
 {
@@ -56,6 +63,7 @@ async Task TeachAndResumeAsync()
 {
     Console.WriteLine(">> Session A — teach the agent a durable preference\n");
     var sessionId = $"redis-iris-demo-a-{Guid.NewGuid():N}";
+    PrintRamIdentity(sessionId);
     var first = CreateAgent(sessionId);
     await using (first.Services)
     {
@@ -83,12 +91,68 @@ async Task TeachAndResumeAsync()
 async Task RecallInNewSessionAsync()
 {
     Console.WriteLine(">> Session B — brand-new session, same owner, long-term recall\n");
-    var second = CreateAgent($"redis-iris-demo-b-{Guid.NewGuid():N}");
+    var sessionId = $"redis-iris-demo-b-{Guid.NewGuid():N}";
+    PrintRamIdentity(sessionId);
+    var second = CreateAgent(sessionId);
     await using (second.Services)
     {
         var session = await second.Agent.CreateSessionAsync();
         await SayAsync(second.Agent, session, "I'm booking another trip. What flight preferences do you remember about me?");
     }
+}
+
+async Task ClearOwnerMemoriesAsync()
+{
+    Console.WriteLine(">> Clear every Redis Agent Memory record for this demo user");
+    Console.WriteLine($"RAM USER   : {ownerId}\n");
+    var client = CreateMemoryClient();
+    var sessionIds = new List<string>();
+    string? sessionPageToken = null;
+    do
+    {
+        var page = await client.ListSessionsAsync(ownerId, limit: 1000, pageToken: sessionPageToken);
+        sessionIds.AddRange(page.Items);
+        sessionPageToken = page.NextPageToken;
+    }
+    while (sessionPageToken is not null);
+
+    foreach (var sessionId in sessionIds)
+    {
+        await client.DeleteSessionMemoryAsync(sessionId);
+    }
+
+    var memoryIds = new List<string>();
+    string? memoryPageToken = null;
+    do
+    {
+        var page = await client.SearchLongTermMemoryAsync(new()
+        {
+            Filter = new() { OwnerId = new() { Eq = ownerId } },
+            Limit = 100,
+            PageToken = memoryPageToken,
+        });
+        memoryIds.AddRange(page.Items.Select(static memory => memory.Id));
+        memoryPageToken = page.NextPageToken;
+    }
+    while (memoryPageToken is not null);
+
+    foreach (var batch in memoryIds.Chunk(100))
+    {
+        var result = await client.BulkDeleteLongTermMemoriesAsync(batch);
+        if (result.Errors is { Count: > 0 })
+        {
+            throw new InvalidOperationException($"RAM failed to delete {result.Errors.Count} long-term memory record(s).");
+        }
+    }
+
+    Console.WriteLine($"CLEARED    : {memoryIds.Count} long-term memory record(s)");
+    Console.WriteLine($"CLEARED    : {sessionIds.Count} session(s)\n");
+}
+
+void PrintRamIdentity(string sessionId)
+{
+    Console.WriteLine($"RAM USER   : {ownerId}");
+    Console.WriteLine($"RAM SESSION: {sessionId}\n");
 }
 
 async Task WaitForPromotionAsync()

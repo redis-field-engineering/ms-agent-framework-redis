@@ -149,6 +149,28 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     }
 
     /// <inheritdoc />
+    public Task<SessionListResult> ListSessionsAsync(
+        string ownerId,
+        int limit = 100,
+        string? pageToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentifier(ownerId, nameof(ownerId), 64);
+        if (limit is < 1 or > 1000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be between 1 and 1000.");
+        }
+
+        var path = $"{this._storePath}/session-memory?filterOwnerId={Uri.EscapeDataString(ownerId)}&limit={limit}";
+        if (pageToken is not null)
+        {
+            path += $"&pageToken={Uri.EscapeDataString(pageToken)}";
+        }
+
+        return this.GetAsync<SessionListResult>(path, "session.list", cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default)
     {
         using var activity = AgentMemoryDiagnostics.StartActivity("ltm.search", this._endpoint);
@@ -182,6 +204,30 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             AgentMemoryDiagnostics.RecordMetricsError("ltm.search", metricStart);
             throw;
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkDeleteLongTermMemoriesResult> BulkDeleteLongTermMemoriesAsync(
+        IReadOnlyList<string> memoryIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(memoryIds);
+        if (memoryIds.Count is < 1 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(memoryIds), "Memory IDs must contain 1-100 items.");
+        }
+
+        foreach (var memoryId in memoryIds)
+        {
+            ValidateIdentifier(memoryId, nameof(memoryIds), 64);
+        }
+
+        using var message = await this.CreateRequestAsync(HttpMethod.Delete, $"{this._storePath}/long-term-memory", cancellationToken).ConfigureAwait(false);
+        message.Content = JsonContent.Create(new { memoryIds }, options: JsonOptions);
+        using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+        await EnsureSuccessAsync(response, "ltm.bulk_delete", cancellationToken).ConfigureAwait(false);
+        return await response.Content.ReadFromJsonAsync<BulkDeleteLongTermMemoriesResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidDataException("Agent Memory returned no bulk delete result.");
     }
 
     private async Task<SessionEvent> GetEventAsync(string sessionId, string eventId, CancellationToken cancellationToken)

@@ -45,6 +45,14 @@ For an unattended end-to-end run, including bounded polling for promotion:
 ./scripts/run-agent-memory-demo.sh full
 ```
 
+Every new RAM session prints the trusted user/owner ID and generated session ID before the agent writes any events. To remove all session history and promoted long-term memories owned by that demo user:
+
+```bash
+./scripts/run-agent-memory-demo.sh clear
+```
+
+`clear` is owner-scoped to `SAMPLE_OWNER_ID`; it does not delete records belonging to other users in the store.
+
 By default, the output focuses on user and assistant turns plus the memory layers. The owner scope comes from trusted application configuration rather than model-generated input.
 
 To include connector traces and low-cardinality metrics in an observability-focused demonstration, opt in with:
@@ -70,4 +78,4 @@ The deliberately small default window of four messages makes the distinction vis
 5. A new Agent Framework session for the same owner receives relevant promoted memory.
 6. Redis operations participate in the connector's tracing and metrics surfaces.
 
-Session deletion does not delete memories that have already been promoted. Use a dedicated synthetic demo owner/store until explicit long-term-memory cleanup is added to the connector.
+The `clear` route deliberately deletes both memory tiers because deleting a session alone does not delete memories that have already been promoted.

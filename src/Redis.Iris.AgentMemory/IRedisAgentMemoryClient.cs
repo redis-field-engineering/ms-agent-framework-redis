@@ -20,6 +20,14 @@ public interface IRedisAgentMemoryClient
     /// <summary>Deletes a session and its events. Promoted long-term memories are not deleted.</summary>
     Task DeleteSessionMemoryAsync(string sessionId, CancellationToken cancellationToken = default);
 
+    /// <summary>Lists sessions belonging to one owner.</summary>
+    Task<SessionListResult> ListSessionsAsync(string ownerId, int limit = 100, string? pageToken = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     /// <summary>Searches long-term memory.</summary>
     Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes 1-100 long-term memories by ID.</summary>
+    Task<BulkDeleteLongTermMemoriesResult> BulkDeleteLongTermMemoriesAsync(IReadOnlyList<string> memoryIds, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
 }

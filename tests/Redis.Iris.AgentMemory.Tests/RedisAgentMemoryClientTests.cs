@@ -72,6 +72,37 @@ public sealed class RedisAgentMemoryClientTests
     }
 
     [Fact]
+    public async Task ListSessionsAsyncScopesTheRequestToOwnerAsync()
+    {
+        var handler = new RecordingHandler(_ => JsonResponse(HttpStatusCode.OK, """
+            {"items":["session-1"],"total":1}
+            """));
+        var client = CreateClient(handler);
+
+        var result = await client.ListSessionsAsync("user-1", limit: 250, pageToken: "next page");
+
+        Assert.Equal(["session-1"], result.Items);
+        Assert.EndsWith("/session-memory?filterOwnerId=user-1&limit=250&pageToken=next%20page", handler.Request!.RequestUri!.AbsoluteUri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BulkDeleteLongTermMemoriesAsyncUsesDeleteWithIdsAsync()
+    {
+        var handler = new RecordingHandler(_ => JsonResponse(HttpStatusCode.OK, """
+            {"deleted":["memory-1","memory-2"],"errors":[]}
+            """));
+        var client = CreateClient(handler);
+
+        var result = await client.BulkDeleteLongTermMemoriesAsync(["memory-1", "memory-2"]);
+
+        Assert.Equal(["memory-1", "memory-2"], result.Deleted);
+        Assert.Equal(HttpMethod.Delete, handler.Request!.Method);
+        Assert.EndsWith("/long-term-memory", handler.Request.RequestUri!.AbsoluteUri, StringComparison.Ordinal);
+        using var body = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("memory-1", body.RootElement.GetProperty("memoryIds")[0].GetString());
+    }
+
+    [Fact]
     public async Task ErrorDoesNotExposeBodyOrCredentialAsync()
     {
         // Arrange

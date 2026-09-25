@@ -14,7 +14,11 @@ set -a
 source "${env_file}"
 set +a
 
-required=(REDIS_IRIS_ENDPOINT REDIS_IRIS_STORE_ID REDIS_IRIS_API_KEY OPENAI_API_KEY)
+mode="${1:-full}"
+required=(REDIS_IRIS_ENDPOINT REDIS_IRIS_STORE_ID REDIS_IRIS_API_KEY)
+if [[ "${mode}" != "clear" ]]; then
+  required+=(OPENAI_API_KEY)
+fi
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing required value ${name} in ${env_file}." >&2
@@ -22,5 +26,4 @@ for name in "${required[@]}"; do
   fi
 done
 
-mode="${1:-full}"
 exec dotnet run --project "${repo_root}/samples/RedisIrisPersistentAgent/RedisIrisPersistentAgent.csproj" -- "${mode}"

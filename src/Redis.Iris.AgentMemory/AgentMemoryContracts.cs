@@ -180,3 +180,17 @@ public sealed record LongTermMemoryRecord(
 public sealed record LongTermMemorySearchResult(
     IReadOnlyList<LongTermMemoryRecord> Items,
     string? NextPageToken = null);
+
+/// <summary>A page of session IDs.</summary>
+public sealed record SessionListResult(
+    IReadOnlyList<string> Items,
+    int Total,
+    string? NextPageToken = null);
+
+/// <summary>Describes one failed item in a bulk operation.</summary>
+public sealed record BulkOperationError(string Id, string Error);
+
+/// <summary>The result of deleting long-term memories in bulk.</summary>
+public sealed record BulkDeleteLongTermMemoriesResult(
+    IReadOnlyList<string> Deleted,
+    IReadOnlyList<BulkOperationError>? Errors = null);
