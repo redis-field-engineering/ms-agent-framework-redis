@@ -49,6 +49,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     public async Task<SessionEvent> AddSessionEventAsync(AddSessionEventRequest request, CancellationToken cancellationToken = default)
     {
         using var activity = AgentMemoryDiagnostics.StartActivity("session.write", this._endpoint);
+        var metricStart = AgentMemoryDiagnostics.StartRequest("session.write");
         try
         {
         ArgumentNullException.ThrowIfNull(request);
@@ -80,11 +81,13 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         var content = await response.Content.ReadFromJsonAsync<AddSessionEventResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);
         var result = content?.Event ?? throw new InvalidDataException("Agent Memory returned no event.");
         AgentMemoryDiagnostics.SetSuccess(activity, 1);
+        AgentMemoryDiagnostics.RecordMetricsSuccess("session.write", metricStart, 1);
         return result;
         }
         catch (Exception exception)
         {
             AgentMemoryDiagnostics.SetError(activity, exception);
+            AgentMemoryDiagnostics.RecordMetricsError("session.write", metricStart);
             throw;
         }
     }
@@ -93,6 +96,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     public async Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default)
     {
         using var activity = AgentMemoryDiagnostics.StartActivity("session.load", this._endpoint);
+        var metricStart = AgentMemoryDiagnostics.StartRequest("session.load");
         try
         {
         ValidateIdentifier(sessionId, nameof(sessionId), 255);
@@ -104,11 +108,13 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
 
         var result = await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
         AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
+        AgentMemoryDiagnostics.RecordMetricsSuccess("session.load", metricStart, result.Events.Count);
         return result;
         }
         catch (Exception exception)
         {
             AgentMemoryDiagnostics.SetError(activity, exception);
+            AgentMemoryDiagnostics.RecordMetricsError("session.load", metricStart);
             throw;
         }
     }
@@ -146,6 +152,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     public async Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default)
     {
         using var activity = AgentMemoryDiagnostics.StartActivity("ltm.search", this._endpoint);
+        var metricStart = AgentMemoryDiagnostics.StartRequest("ltm.search");
         try
         {
         ArgumentNullException.ThrowIfNull(request);
@@ -166,11 +173,13 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         var result = await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidDataException("Agent Memory returned no search result.");
         AgentMemoryDiagnostics.SetSuccess(activity, result.Items.Count);
+        AgentMemoryDiagnostics.RecordMetricsSuccess("ltm.search", metricStart, result.Items.Count);
         return result;
         }
         catch (Exception exception)
         {
             AgentMemoryDiagnostics.SetError(activity, exception);
+            AgentMemoryDiagnostics.RecordMetricsError("ltm.search", metricStart);
             throw;
         }
     }

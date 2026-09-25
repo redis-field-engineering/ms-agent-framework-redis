@@ -1,6 +1,7 @@
 // Copyright (c) Redis, Inc.
 
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace Redis.Iris.AgentMemory;
 
@@ -13,6 +14,17 @@ public static class AgentMemoryDiagnostics
     /// <summary>Gets the connector activity source.</summary>
     public static ActivitySource ActivitySource { get; } = new(ActivitySourceName);
 
+    /// <summary>Gets the connector meter name.</summary>
+    public const string MeterName = "Redis.Iris.AgentMemory";
+
+    private static readonly Meter Meter = new(MeterName);
+    private static readonly Counter<long> RequestCounter = Meter.CreateCounter<long>("redis.iris.requests", "{request}");
+    private static readonly Counter<long> ErrorCounter = Meter.CreateCounter<long>("redis.iris.errors", "{error}");
+    private static readonly Counter<long> RetryCounter = Meter.CreateCounter<long>("redis.iris.retries", "{retry}");
+    private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>("redis.iris.operation.duration", "ms");
+    private static readonly Histogram<long> RecallResults = Meter.CreateHistogram<long>("redis.iris.recall.results", "{memory}");
+    private static readonly Counter<long> SkippedMessages = Meter.CreateCounter<long>("redis.iris.messages.skipped", "{message}");
+
     internal static Activity? StartActivity(string operation, Uri endpoint)
     {
         var activity = ActivitySource.StartActivity($"redis.iris.{operation}", ActivityKind.Client);
@@ -21,6 +33,36 @@ public static class AgentMemoryDiagnostics
         activity?.SetTag("redis.iris.retry_count", 0);
         return activity;
     }
+
+    internal static long StartRequest(string operation)
+    {
+        RequestCounter.Add(1, new KeyValuePair<string, object?>("redis.iris.operation", operation));
+        RetryCounter.Add(0, new KeyValuePair<string, object?>("redis.iris.operation", operation));
+        return Stopwatch.GetTimestamp();
+    }
+
+    internal static void RecordMetricsSuccess(string operation, long startedAt, int resultCount)
+    {
+        Duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            new KeyValuePair<string, object?>("redis.iris.operation", operation),
+            new KeyValuePair<string, object?>("redis.iris.outcome", "success"));
+        if (operation == "ltm.search")
+        {
+            RecallResults.Record(resultCount, new KeyValuePair<string, object?>("redis.iris.operation", operation));
+        }
+    }
+
+    internal static void RecordMetricsError(string operation, long startedAt)
+    {
+        Duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            new KeyValuePair<string, object?>("redis.iris.operation", operation),
+            new KeyValuePair<string, object?>("redis.iris.outcome", "error"));
+        ErrorCounter.Add(1, new KeyValuePair<string, object?>("redis.iris.operation", operation));
+    }
+
+    /// <summary>Records a skipped message using a bounded reason.</summary>
+    public static void RecordSkippedMessage(string reason) =>
+        SkippedMessages.Add(1, new KeyValuePair<string, object?>("redis.iris.reason", reason));
 
     internal static void SetSuccess(Activity? activity, int resultCount = 0)
     {

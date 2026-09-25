@@ -44,6 +44,7 @@ public sealed class RedisIrisMessageMapper
         var mapping = this.MapRole(message.Role, ownerId, agentId);
         if (mapping is null)
         {
+            AgentMemoryDiagnostics.RecordSkippedMessage("unsupported_role");
             return null;
         }
 
@@ -59,6 +60,7 @@ public sealed class RedisIrisMessageMapper
 
         if (string.IsNullOrWhiteSpace(text))
         {
+            AgentMemoryDiagnostics.RecordSkippedMessage("unsupported_or_empty_content");
             return null;
         }
 
