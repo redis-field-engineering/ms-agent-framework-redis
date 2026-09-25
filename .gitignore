@@ -1,6 +1,7 @@
 bin/
 obj/
 TestResults/
+artifacts/
 .env
 .env.local
 *.user

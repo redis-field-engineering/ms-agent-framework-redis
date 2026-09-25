@@ -52,37 +52,37 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         var metricStart = AgentMemoryDiagnostics.StartRequest("session.write");
         try
         {
-        ArgumentNullException.ThrowIfNull(request);
-        ValidateIdentifier(request.ActorId, nameof(request.ActorId), 255);
-        if (request.SessionId is not null)
-        {
-            ValidateIdentifier(request.SessionId, nameof(request.SessionId), 255);
-        }
+            ArgumentNullException.ThrowIfNull(request);
+            ValidateIdentifier(request.ActorId, nameof(request.ActorId), 255);
+            if (request.SessionId is not null)
+            {
+                ValidateIdentifier(request.SessionId, nameof(request.SessionId), 255);
+            }
 
-        if (request.CreatedAt.Offset != TimeSpan.Zero)
-        {
-            throw new ArgumentException("CreatedAt must be UTC.", nameof(request));
-        }
+            if (request.CreatedAt.Offset != TimeSpan.Zero)
+            {
+                throw new ArgumentException("CreatedAt must be UTC.", nameof(request));
+            }
 
-        if (request.Content.Count == 0 || request.Content.Any(part => string.IsNullOrWhiteSpace(part.Text)))
-        {
-            throw new ArgumentException("At least one non-empty text content part is required.", nameof(request));
-        }
+            if (request.Content.Count == 0 || request.Content.Any(part => string.IsNullOrWhiteSpace(part.Text)))
+            {
+                throw new ArgumentException("At least one non-empty text content part is required.", nameof(request));
+            }
 
-        if (request.Metadata is { } metadata && JsonSerializer.SerializeToUtf8Bytes(metadata, JsonOptions).Length > MaximumMetadataBytes)
-        {
-            throw new ArgumentException("Metadata must not exceed 16 KiB.", nameof(request));
-        }
+            if (request.Metadata is { } metadata && JsonSerializer.SerializeToUtf8Bytes(metadata, JsonOptions).Length > MaximumMetadataBytes)
+            {
+                throw new ArgumentException("Metadata must not exceed 16 KiB.", nameof(request));
+            }
 
-        using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/session-memory/events", cancellationToken).ConfigureAwait(false);
-        message.Content = JsonContent.Create(request, options: JsonOptions);
-        using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(response, "session.add_event", cancellationToken).ConfigureAwait(false);
-        var content = await response.Content.ReadFromJsonAsync<AddSessionEventResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);
-        var result = content?.Event ?? throw new InvalidDataException("Agent Memory returned no event.");
-        AgentMemoryDiagnostics.SetSuccess(activity, 1);
-        AgentMemoryDiagnostics.RecordMetricsSuccess("session.write", metricStart, 1);
-        return result;
+            using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/session-memory/events", cancellationToken).ConfigureAwait(false);
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(response, "session.add_event", cancellationToken).ConfigureAwait(false);
+            var content = await response.Content.ReadFromJsonAsync<AddSessionEventResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            var result = content?.Event ?? throw new InvalidDataException("Agent Memory returned no event.");
+            AgentMemoryDiagnostics.SetSuccess(activity, 1);
+            AgentMemoryDiagnostics.RecordMetricsSuccess("session.write", metricStart, 1);
+            return result;
         }
         catch (Exception exception)
         {
@@ -99,17 +99,17 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         var metricStart = AgentMemoryDiagnostics.StartRequest("session.load");
         try
         {
-        ValidateIdentifier(sessionId, nameof(sessionId), 255);
-        var path = $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}";
-        if (includeSummarizedEvents)
-        {
-            path += "?includeSummarisedEvents=true";
-        }
+            ValidateIdentifier(sessionId, nameof(sessionId), 255);
+            var path = $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}";
+            if (includeSummarizedEvents)
+            {
+                path += "?includeSummarisedEvents=true";
+            }
 
-        var result = await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
-        AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
-        AgentMemoryDiagnostics.RecordMetricsSuccess("session.load", metricStart, result.Events.Count);
-        return result;
+            var result = await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
+            AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
+            AgentMemoryDiagnostics.RecordMetricsSuccess("session.load", metricStart, result.Events.Count);
+            return result;
         }
         catch (Exception exception)
         {
@@ -155,26 +155,26 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         var metricStart = AgentMemoryDiagnostics.StartRequest("ltm.search");
         try
         {
-        ArgumentNullException.ThrowIfNull(request);
-        if (request.Limit is < 1 or > 100)
-        {
-            throw new ArgumentOutOfRangeException(nameof(request), "Limit must be between 1 and 100.");
-        }
+            ArgumentNullException.ThrowIfNull(request);
+            if (request.Limit is < 1 or > 100)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), "Limit must be between 1 and 100.");
+            }
 
-        if (request.SimilarityThreshold is < 0 or > 1)
-        {
-            throw new ArgumentOutOfRangeException(nameof(request), "SimilarityThreshold must be between 0 and 1.");
-        }
+            if (request.SimilarityThreshold is < 0 or > 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request), "SimilarityThreshold must be between 0 and 1.");
+            }
 
-        using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/long-term-memory/search", cancellationToken).ConfigureAwait(false);
-        message.Content = JsonContent.Create(request, options: JsonOptions);
-        using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
-        await EnsureSuccessAsync(response, "ltm.search", cancellationToken).ConfigureAwait(false);
-        var result = await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidDataException("Agent Memory returned no search result.");
-        AgentMemoryDiagnostics.SetSuccess(activity, result.Items.Count);
-        AgentMemoryDiagnostics.RecordMetricsSuccess("ltm.search", metricStart, result.Items.Count);
-        return result;
+            using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/long-term-memory/search", cancellationToken).ConfigureAwait(false);
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessAsync(response, "ltm.search", cancellationToken).ConfigureAwait(false);
+            var result = await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidDataException("Agent Memory returned no search result.");
+            AgentMemoryDiagnostics.SetSuccess(activity, result.Items.Count);
+            AgentMemoryDiagnostics.RecordMetricsSuccess("ltm.search", metricStart, result.Items.Count);
+            return result;
         }
         catch (Exception exception)
         {

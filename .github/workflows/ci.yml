@@ -1,0 +1,25 @@
+name: dotnet-ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore ms-agent-framework-redis.slnx
+      - run: dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
+      - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
+      - run: dotnet test ms-agent-framework-redis.slnx -c Release --no-build
+      - run: dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
+      - run: dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
+      - run: ./eng/validate-packages.sh artifacts
