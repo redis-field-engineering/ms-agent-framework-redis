@@ -26,10 +26,11 @@ var openAiApiKey = Required("OPENAI_API_KEY");
 var ownerId = Environment.GetEnvironmentVariable("SAMPLE_OWNER_ID") ?? "redis-iris-demo-shopper";
 var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4.1-mini";
 var promotionTimeout = TimeSpan.FromMinutes(ParsePositiveDouble("REDIS_IRIS_PROMOTION_TIMEOUT_MINUTES", 8));
+var shortTermWindow = ParsePositiveInt("REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 
 using var telemetry = StartConsoleTelemetry();
 Console.WriteLine("=== Redis Iris Agent Memory + Microsoft Agent Framework ===");
-Console.WriteLine($"Mode: {command}; Owner: {ownerId}; Model: {model}\n");
+Console.WriteLine($"Mode: {command}; Owner: {ownerId}; Model: {model}; Short-term window: {shortTermWindow} messages\n");
 
 if (command is "teach" or "full")
 {
@@ -58,8 +59,12 @@ async Task TeachAndResumeAsync()
     await using (first.Services)
     {
         var session = await first.Agent.CreateSessionAsync();
+        await SayAsync(first.Agent, session, "My name is Amelia and I live in Boston.");
         await SayAsync(first.Agent, session, "I always prefer a window seat and morning flights when I travel.");
-        await SayAsync(first.Agent, session, "What travel preferences did I just tell you?");
+        await SayAsync(first.Agent, session, "I avoid red-eye flights whenever possible.");
+        await SayAsync(first.Agent, session, "Summarize the travel preferences currently relevant to this conversation.");
+
+        await PrintMemoryLayersAsync(sessionId);
 
         Console.WriteLine(">> Recreate the application agent and resume the same Redis-backed session\n");
         JsonElement serializedSession = await first.Agent.SerializeSessionAsync(session);
@@ -87,12 +92,7 @@ async Task RecallInNewSessionAsync()
 
 async Task WaitForPromotionAsync()
 {
-    using var client = new HttpClient();
-    var memoryClient = new RedisAgentMemoryClient(client, new()
-    {
-        Endpoint = new(irisEndpoint),
-        StoreId = irisStoreId,
-    }, new FixedAgentMemoryCredentialProvider(irisApiKey));
+    var memoryClient = CreateMemoryClient();
     var search = new RedisIrisLongTermMemorySearch(memoryClient);
     var deadline = DateTimeOffset.UtcNow + promotionTimeout;
     while (DateTimeOffset.UtcNow < deadline)
@@ -121,6 +121,29 @@ async Task WaitForPromotionAsync()
     throw new TimeoutException("No promoted memory appeared before the configured timeout. Run 'recall' later; session writes remain durable.");
 }
 
+async Task PrintMemoryLayersAsync(string sessionId)
+{
+    var client = CreateMemoryClient();
+    var session = await client.GetSessionMemoryAsync(sessionId, includeSummarizedEvents: true);
+    Console.WriteLine(">> Redis Agent Memory layers\n");
+    Console.WriteLine($"SESSION    : {session.Events.Count} event(s) stored durably for this session.");
+    Console.WriteLine(session.Summary is null
+        ? "SUMMARY    : No managed session summary yet."
+        : $"SUMMARY    : {session.Summary.Text}");
+    Console.WriteLine($"WINDOW     : Agent Framework receives the newest {Math.Min(shortTermWindow, session.Events.Count)} event(s):");
+    foreach (var item in session.Events.TakeLast(shortTermWindow))
+    {
+        Console.WriteLine($"  {item.Role,-9} {string.Join(" ", item.Content.Select(static part => part.Text))}");
+    }
+
+    Console.WriteLine();
+}
+
+RedisAgentMemoryClient CreateMemoryClient() => new(
+    new HttpClient(),
+    new() { Endpoint = new Uri(irisEndpoint), StoreId = irisStoreId },
+    new FixedAgentMemoryCredentialProvider(irisApiKey));
+
 (AIAgent Agent, ServiceProvider Services) CreateAgent(string trustedSessionId)
 {
     var serviceCollection = new ServiceCollection();
@@ -138,7 +161,7 @@ async Task WaitForPromotionAsync()
             AgentId: "redis-iris-travel-assistant");
         options.AuthorizationPolicy = identity =>
             identity.TenantId == "redis-iris-demo" && identity.OwnerId == ownerId;
-        options.ChatHistory.MaxMessagesToRetrieve = 20;
+        options.ChatHistory.MaxMessagesToRetrieve = shortTermWindow;
         options.Memory.Search = new() { Limit = 5, SimilarityThreshold = 0.55 };
         options.RecallFailurePolicy = RedisIrisFailurePolicy.FailClosed;
     });
@@ -181,6 +204,19 @@ static double ParsePositiveDouble(string name, double fallback)
     return double.TryParse(value, out var parsed) && parsed > 0
         ? parsed
         : throw new InvalidOperationException($"{name} must be a positive number.");
+}
+
+static int ParsePositiveInt(string name, int fallback)
+{
+    var value = Environment.GetEnvironmentVariable(name);
+    if (value is null)
+    {
+        return fallback;
+    }
+
+    return int.TryParse(value, out var parsed) && parsed > 0
+        ? parsed
+        : throw new InvalidOperationException($"{name} must be a positive integer.");
 }
 
 static IDisposable StartConsoleTelemetry()
