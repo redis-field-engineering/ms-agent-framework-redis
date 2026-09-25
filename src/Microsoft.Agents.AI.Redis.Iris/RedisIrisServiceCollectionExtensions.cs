@@ -98,16 +98,20 @@ public static class RedisIrisServiceCollectionExtensions
 
         if (options.UseChatHistoryProvider)
         {
+            options.ChatHistory.LoadFailurePolicy = options.HistoryLoadFailurePolicy;
+            options.ChatHistory.WriteFailurePolicy = options.WriteFailurePolicy;
             services.AddSingleton(provider => new RedisIrisChatHistoryProvider(
                 provider.GetRequiredService<IRedisAgentMemoryClient>(),
                 stateInitializer,
                 provider.GetRequiredService<RedisIrisMessageMapper>(),
                 options.ChatHistory,
-                provider.GetRequiredService<RedisIrisSessionEventWriter>()));
+                provider.GetRequiredService<RedisIrisSessionEventWriter>(),
+                provider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>()));
         }
 
         options.Memory.FailClosed = options.RecallFailurePolicy == RedisIrisFailurePolicy.FailClosed;
         options.Memory.CaptureSessionEvents = !options.UseChatHistoryProvider;
+        options.Memory.WriteFailurePolicy = options.WriteFailurePolicy;
         services.AddSingleton(provider => new RedisIrisMemoryProvider(
             provider.GetRequiredService<RedisIrisLongTermMemorySearch>(),
             stateInitializer,

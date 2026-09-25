@@ -211,11 +211,11 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Implement add, retrieve-one, retrieve-session, delete-one, and delete-session operations.
-- [ ] Preserve client-created and server-ingested timestamps.
-- [ ] Return events in the order guaranteed by the service contract.
-- [ ] Validate role, text content, metadata size, and identifiers before sending requests.
-- [ ] Contract tests cover success, empty sessions, invalid input, not found, unauthorized, forbidden, throttled, and server errors.
+- [x] Implement add, retrieve-one, retrieve-session, delete-one, and delete-session operations.
+- [x] Preserve client-created and server-ingested timestamps.
+- [x] Return events in the order guaranteed by the service contract.
+- [x] Validate role, text content, metadata size, and identifiers before sending requests.
+- [x] Contract tests cover success, empty sessions, invalid input, not found, unauthorized, forbidden, throttled, and server errors.
 
 #### US-102: Map Agent Framework messages to Iris events
 
@@ -224,12 +224,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Map user, assistant, and opted-in system text messages to the corresponding Iris roles.
-- [ ] Skip empty, tool, function, image, audio, and other unsupported content by default.
-- [ ] Provide an application callback for projecting unsupported content to text.
-- [ ] Preserve safe provenance metadata without exceeding service limits.
-- [ ] Reject or safely handle a first event that would establish the wrong session owner.
-- [ ] Unit tests cover all supported and unsupported content types.
+- [x] Map user, assistant, and opted-in system text messages to the corresponding Iris roles.
+- [x] Skip empty, tool, function, image, audio, and other unsupported content by default.
+- [x] Provide an application callback for projecting unsupported content to text.
+- [x] Preserve safe provenance metadata without exceeding service limits.
+- [x] Reject or safely handle a first event that would establish the wrong session owner.
+- [x] Unit tests cover all supported and unsupported content types.
 
 #### US-103: Implement `RedisIrisChatHistoryProvider`
 
@@ -238,14 +238,14 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Derive from the current Agent Framework `ChatHistoryProvider` abstraction.
-- [ ] Load chronological history before model invocation.
-- [ ] Store only new external request and response messages after a successful invocation.
-- [ ] Never re-store loaded history or messages injected by context providers.
-- [ ] Store session-specific identifiers only through `ProviderSessionState<TState>`.
-- [ ] Support a maximum returned-message count or reducer hook for model-context limits.
-- [ ] Default history-load and history-write failures to fail closed.
-- [ ] Unit tests include session serialization and concurrent independent sessions.
+- [x] Derive from the current Agent Framework `ChatHistoryProvider` abstraction.
+- [x] Load chronological history before model invocation.
+- [x] Store only new external request and response messages after a successful invocation.
+- [x] Never re-store loaded history or messages injected by context providers.
+- [x] Store session-specific identifiers only through `ProviderSessionState<TState>`.
+- [x] Support a maximum returned-message count or reducer hook for model-context limits.
+- [x] Default history-load and history-write failures to fail closed.
+- [x] Unit tests include session serialization and concurrent independent sessions.
 
 #### US-104: Enforce a single session-event writer
 
@@ -254,11 +254,11 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Define one component as the designated event writer for each configured agent.
-- [ ] The standard registration helper rejects or prevents configurations with multiple writers.
-- [ ] Direct construction documents how to disable event capture in the memory provider.
-- [ ] Tests verify exactly one Iris event per logical message when both providers are installed.
-- [ ] Tests verify standalone memory-provider mode can capture events when no Iris history provider is used.
+- [x] Define one component as the designated event writer for each configured agent.
+- [x] The standard registration helper rejects or prevents configurations with multiple writers.
+- [x] Direct construction documents how to disable event capture in the memory provider.
+- [x] Tests verify exactly one Iris event per logical message when both providers are installed.
+- [x] Tests verify standalone memory-provider mode can capture events when no Iris history provider is used.
 
 #### US-105: Implement owner-scoped long-term-memory search
 
@@ -267,12 +267,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Build search text from filtered external input, defaulting to the latest non-empty user message.
-- [ ] Require an owner equality filter for the standard per-user API.
-- [ ] Allow additional namespace, topic, memory-type, timestamp, and threshold filters without allowing them to remove or replace the owner filter.
-- [ ] Apply filtering on the server rather than filtering a broad result set locally.
-- [ ] Support result limits and opaque pagination tokens in the client API.
-- [ ] Tests demonstrate that different owners cannot retrieve each other's memories through the provider.
+- [x] Build search text from filtered external input, defaulting to the latest non-empty user message.
+- [x] Require an owner equality filter for the standard per-user API.
+- [x] Allow additional namespace, topic, memory-type, timestamp, and threshold filters without allowing them to remove or replace the owner filter.
+- [x] Apply filtering on the server rather than filtering a broad result set locally.
+- [x] Support result limits and opaque pagination tokens in the client API.
+- [x] Tests demonstrate that different owners cannot retrieve each other's memories through the provider.
 
 #### US-106: Implement `RedisIrisMemoryProvider`
 
@@ -281,14 +281,14 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Derive from the current Agent Framework `MessageAIContextProvider` abstraction.
-- [ ] Search before invocation and inject one bounded, clearly delimited context message.
-- [ ] Label recalled material as untrusted remembered context rather than instructions.
-- [ ] Do not inject recalled material with the system role.
-- [ ] Attach non-sensitive provenance metadata identifying the provider and memory IDs.
-- [ ] Cap result count and aggregate context size.
-- [ ] Default recall failures to fail open with a redacted warning.
-- [ ] Allow applications to select fail-open or fail-closed behavior.
+- [x] Derive from the current Agent Framework `MessageAIContextProvider` abstraction.
+- [x] Search before invocation and inject one bounded, clearly delimited context message.
+- [x] Label recalled material as untrusted remembered context rather than instructions.
+- [x] Do not inject recalled material with the system role.
+- [x] Attach non-sensitive provenance metadata identifying the provider and memory IDs.
+- [x] Cap result count and aggregate context size.
+- [x] Default recall failures to fail open with a redacted warning.
+- [x] Allow applications to select fail-open or fail-closed behavior.
 
 #### US-107: Add provider registration and options validation
 
@@ -297,12 +297,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Provide dependency-injection registration for the client and both providers.
-- [ ] Provide explicit delegates for tenant, owner, session, actor, agent, namespace, and topic resolution.
-- [ ] Validate required endpoint, store, credential, identity, threshold, and result-limit options during startup where possible.
-- [ ] Standard registration enables exactly one event writer.
-- [ ] Options support independent load, recall, and write failure policies.
-- [ ] Configuration errors identify the invalid setting without revealing secret values.
+- [x] Provide dependency-injection registration for the client and both providers.
+- [x] Provide explicit delegates for tenant, owner, session, actor, agent, namespace, and topic resolution.
+- [x] Validate required endpoint, store, credential, identity, threshold, and result-limit options during startup where possible.
+- [x] Standard registration enables exactly one event writer.
+- [x] Options support independent load, recall, and write failure policies.
+- [x] Configuration errors identify the invalid setting without revealing secret values.
 
 #### US-108: Enforce Agent Memory authorization boundaries
 
@@ -311,12 +311,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Identity resolvers receive trusted invocation/session context rather than raw model-generated arguments.
-- [ ] The connector fails closed when tenant, store, owner, or session identity cannot be resolved.
-- [ ] A caller cannot override the mandatory owner filter through optional filter configuration.
-- [ ] Cross-owner and cross-store administrative operations use separately named APIs and require an explicit authorization callback.
-- [ ] Tests attempt store, owner, namespace, and filter substitution attacks.
-- [ ] Security documentation includes confused-deputy and indirect-prompt-injection risks.
+- [x] Identity resolvers receive trusted invocation/session context rather than raw model-generated arguments.
+- [x] The connector fails closed when tenant, store, owner, or session identity cannot be resolved.
+- [x] A caller cannot override the mandatory owner filter through optional filter configuration.
+- [x] Cross-owner and cross-store administrative operations use separately named APIs and require an explicit authorization callback.
+- [x] Tests attempt store, owner, namespace, and filter substitution attacks.
+- [x] Security documentation includes confused-deputy and indirect-prompt-injection risks.
 
 #### US-109: Instrument Agent Memory tracing
 
@@ -325,11 +325,11 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Create child spans under the active Agent Framework invocation for session load, session write, and LTM search.
-- [ ] Propagate W3C trace context through HTTP automatically.
-- [ ] Record operation, outcome, server address, result count, retry count, and status code using approved attributes.
-- [ ] Mark errors according to OpenTelemetry conventions without recording sensitive response bodies.
-- [ ] Tests use an in-memory listener/exporter to verify span parenting and redaction.
+- [x] Create child spans under the active Agent Framework invocation for session load, session write, and LTM search.
+- [x] Propagate W3C trace context through HTTP automatically.
+- [x] Record operation, outcome, server address, result count, retry count, and status code using approved attributes.
+- [x] Mark errors according to OpenTelemetry conventions without recording sensitive response bodies.
+- [x] Tests use an in-memory listener/exporter to verify span parenting and redaction.
 
 #### US-110: Instrument Agent Memory metrics
 
@@ -338,11 +338,11 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Record operation duration, request count, error count, retry count, recall result count, and skipped-message count.
-- [ ] Separate session load, session write, LTM search, and explicit LTM operations using bounded attributes.
-- [ ] Do not use owner, session, memory, raw endpoint, or query values as metric dimensions.
-- [ ] Document metric units and attribute cardinality.
-- [ ] Tests verify emitted measurements and the absence of prohibited attributes.
+- [x] Record operation duration, request count, error count, retry count, recall result count, and skipped-message count.
+- [x] Separate session load, session write, LTM search, and explicit LTM operations using bounded attributes.
+- [x] Do not use owner, session, memory, raw endpoint, or query values as metric dimensions.
+- [x] Document metric units and attribute cardinality.
+- [x] Tests verify emitted measurements and the absence of prohibited attributes.
 
 #### US-111: Provide a runnable .NET Agent Memory sample
 
@@ -351,12 +351,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Demonstrate environment-based endpoint, store ID, and API-key configuration.
-- [ ] Demonstrate explicit owner and session resolution.
-- [ ] Demonstrate session resume after recreating the application agent.
-- [ ] Demonstrate cross-session long-term recall while explaining promotion delay.
-- [ ] Include OpenTelemetry console or test exporter setup.
-- [ ] Do not contain embedded secrets or recommend owner-less searches.
+- [x] Demonstrate environment-based endpoint, store ID, and API-key configuration.
+- [x] Demonstrate explicit owner and session resolution.
+- [x] Demonstrate session resume after recreating the application agent.
+- [x] Demonstrate cross-session long-term recall while explaining promotion delay.
+- [x] Include OpenTelemetry console or test exporter setup.
+- [x] Do not contain embedded secrets or recommend owner-less searches.
 
 #### US-112: Establish the .NET MVP quality gate
 
@@ -365,12 +365,12 @@ Both entry points will use the same local MCP client, authentication, connection
 
 **Acceptance Criteria:**
 
-- [ ] Unit, contract, and opt-in live-test suites are documented and runnable independently.
-- [ ] Live tests skip cleanly when required environment variables are absent.
-- [ ] Formatting, analyzers, nullable analysis, API compatibility, package validation, and tests pass in CI.
-- [ ] Public C# files use required headers and XML documentation.
-- [ ] A supported Agent Framework version matrix is documented.
-- [ ] Package contents contain no test credentials or captured customer data.
+- [x] Unit, contract, and opt-in live-test suites are documented and runnable independently.
+- [x] Live tests skip cleanly when required environment variables are absent.
+- [x] Formatting, analyzers, nullable analysis, API compatibility, package validation, and tests pass in CI.
+- [x] Public C# files use required headers and XML documentation.
+- [x] A supported Agent Framework version matrix is documented.
+- [x] Package contents contain no test credentials or captured customer data.
 
 ### Milestone 2: Agent Memory production hardening
 

@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Redis.Iris.AgentMemory;
 
 namespace Microsoft.Agents.AI.Redis.Iris;
@@ -28,6 +29,12 @@ public sealed class RedisIrisChatHistoryProviderOptions
 
     /// <summary>Gets or sets an optional filter for response messages.</summary>
     public Func<IEnumerable<ChatMessage>, IEnumerable<ChatMessage>>? StoreInputResponseMessageFilter { get; set; }
+
+    /// <summary>Gets or sets history-load failure behavior.</summary>
+    public RedisIrisFailurePolicy LoadFailurePolicy { get; set; } = RedisIrisFailurePolicy.FailClosed;
+
+    /// <summary>Gets or sets history-write failure behavior.</summary>
+    public RedisIrisFailurePolicy WriteFailurePolicy { get; set; } = RedisIrisFailurePolicy.FailClosed;
 }
 
 /// <summary>Persists Agent Framework chat history in Redis Agent Memory session memory.</summary>
@@ -38,6 +45,8 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     private readonly RedisIrisSessionEventWriter _eventWriter;
     private readonly ProviderSessionState<RedisIrisProviderState> _sessionState;
     private readonly int? _maxMessagesToRetrieve;
+    private readonly RedisIrisChatHistoryProviderOptions _options;
+    private readonly ILogger<RedisIrisChatHistoryProvider>? _logger;
     private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>Initializes a Redis Iris chat-history provider.</summary>
@@ -46,7 +55,8 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
         Func<AgentSession?, RedisIrisProviderState> stateInitializer,
         RedisIrisMessageMapper? mapper = null,
         RedisIrisChatHistoryProviderOptions? options = null,
-        RedisIrisSessionEventWriter? eventWriter = null)
+        RedisIrisSessionEventWriter? eventWriter = null,
+        ILoggerFactory? loggerFactory = null)
         : base(
             options?.ProvideOutputMessageFilter,
             options?.StoreInputRequestMessageFilter ?? ExternalMessagesOnly,
@@ -61,10 +71,12 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
         }
 
         this._client = client;
+        this._options = options;
         this._mapper = mapper ?? new RedisIrisMessageMapper();
         this._eventWriter = eventWriter ?? new RedisIrisSessionEventWriter(client, RedisIrisEventWriter.ChatHistoryProvider, this._mapper);
         this._sessionState = new ProviderSessionState<RedisIrisProviderState>(stateInitializer, options.StateKey, options.JsonSerializerOptions);
         this._maxMessagesToRetrieve = options.MaxMessagesToRetrieve;
+        this._logger = loggerFactory?.CreateLogger<RedisIrisChatHistoryProvider>();
     }
 
     /// <inheritdoc />
@@ -81,6 +93,11 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
         }
         catch (AgentMemoryException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
+            return [];
+        }
+        catch (Exception exception) when (this._options.LoadFailurePolicy == RedisIrisFailurePolicy.FailOpen && exception is not OperationCanceledException)
+        {
+            this._logger?.LogWarning(exception, "Redis Iris history load failed; continuing without stored history.");
             return [];
         }
 
@@ -102,11 +119,18 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask StoreChatHistoryAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
-        await this._eventWriter.WriteAsync(
-            RedisIrisEventWriter.ChatHistoryProvider,
-            context.RequestMessages.Concat(context.ResponseMessages ?? []),
-            state,
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await this._eventWriter.WriteAsync(
+                RedisIrisEventWriter.ChatHistoryProvider,
+                context.RequestMessages.Concat(context.ResponseMessages ?? []),
+                state,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (this._options.WriteFailurePolicy == RedisIrisFailurePolicy.FailOpen && exception is not OperationCanceledException)
+        {
+            this._logger?.LogWarning(exception, "Redis Iris history write failed; continuing without persistence.");
+        }
     }
 
     private static IEnumerable<ChatMessage> ExternalMessagesOnly(IEnumerable<ChatMessage> messages) =>

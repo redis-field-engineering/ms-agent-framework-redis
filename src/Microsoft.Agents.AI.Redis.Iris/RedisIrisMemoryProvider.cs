@@ -19,6 +19,8 @@ public sealed class RedisIrisMemoryProviderOptions
     /// <summary>Gets or sets whether this provider attempts session-event capture.</summary>
     /// <remarks>Leave disabled when <see cref="RedisIrisChatHistoryProvider"/> is installed.</remarks>
     public bool CaptureSessionEvents { get; set; }
+    /// <summary>Gets or sets standalone session-event write failure behavior.</summary>
+    public RedisIrisFailurePolicy WriteFailurePolicy { get; set; } = RedisIrisFailurePolicy.FailClosed;
     /// <summary>Gets or sets the provider state key.</summary>
     public string StateKey { get; set; } = nameof(RedisIrisMemoryProvider);
 }
@@ -127,10 +129,17 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
         }
 
         var state = this._sessionState.GetOrInitializeState(context.Session);
-        await this._eventWriter.WriteAsync(
-            RedisIrisEventWriter.MemoryProvider,
-            context.RequestMessages.Concat(context.ResponseMessages ?? []),
-            state,
-            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await this._eventWriter.WriteAsync(
+                RedisIrisEventWriter.MemoryProvider,
+                context.RequestMessages.Concat(context.ResponseMessages ?? []),
+                state,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (this._options.WriteFailurePolicy == RedisIrisFailurePolicy.FailOpen && exception is not OperationCanceledException)
+        {
+            this._logger?.LogWarning(exception, "Redis Iris session-event write failed; continuing without persistence.");
+        }
     }
 }

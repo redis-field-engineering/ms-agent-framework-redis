@@ -56,6 +56,20 @@ public sealed class RedisIrisChatHistoryProviderTests
     }
 
     [Fact]
+    public async Task HistoryLoadCanFailOpen()
+    {
+        var client = new RecordingClient { Exception = new HttpRequestException("unavailable") };
+        var provider = new RedisIrisChatHistoryProvider(
+            client,
+            _ => new("session-a", "owner-a", "agent-a"),
+            options: new() { LoadFailurePolicy = RedisIrisFailurePolicy.FailOpen });
+
+        var result = await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "current")]));
+
+        Assert.Single(result);
+    }
+
+    [Fact]
     public void ProviderStateRoundTripsThroughJson()
     {
         var state = new RedisIrisProviderState("session-a", "owner-a", "agent-a");
@@ -97,6 +111,7 @@ public sealed class RedisIrisChatHistoryProviderTests
     {
         private readonly object _gate = new();
         public SessionMemory Memory { get; set; } = new("missing", "owner", []);
+        public Exception? Exception { get; set; }
         public List<AddSessionEventRequest> Added { get; } = [];
 
         public Task<SessionEvent> AddSessionEventAsync(AddSessionEventRequest request, CancellationToken cancellationToken = default)
@@ -109,7 +124,8 @@ public sealed class RedisIrisChatHistoryProviderTests
             return Task.FromResult(Event(Guid.NewGuid().ToString(), request.SessionId!, request.ActorId, request.Role, request.Content.Single().Text, 1));
         }
 
-        public Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default) => Task.FromResult(this.Memory);
+        public Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default) =>
+            this.Exception is null ? Task.FromResult(this.Memory) : Task.FromException<SessionMemory>(this.Exception);
         public Task<SessionEvent> GetSessionEventAsync(string sessionId, string eventId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteSessionEventAsync(string sessionId, string eventId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task DeleteSessionMemoryAsync(string sessionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
