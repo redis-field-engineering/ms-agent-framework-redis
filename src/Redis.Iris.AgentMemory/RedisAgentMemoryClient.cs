@@ -19,6 +19,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     private readonly HttpClient _httpClient;
     private readonly IAgentMemoryCredentialProvider _credentialProvider;
     private readonly string _storePath;
+    private readonly Uri _endpoint;
 
     /// <summary>Initializes a new client.</summary>
     public RedisAgentMemoryClient(
@@ -39,6 +40,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
 
         this._httpClient = httpClient;
         this._credentialProvider = credentialProvider;
+        this._endpoint = options.Endpoint;
         this._storePath = $"v1/stores/{Uri.EscapeDataString(options.StoreId)}";
         this._httpClient.BaseAddress ??= EnsureTrailingSlash(options.Endpoint);
     }
@@ -46,6 +48,9 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     /// <inheritdoc />
     public async Task<SessionEvent> AddSessionEventAsync(AddSessionEventRequest request, CancellationToken cancellationToken = default)
     {
+        using var activity = AgentMemoryDiagnostics.StartActivity("session.write", this._endpoint);
+        try
+        {
         ArgumentNullException.ThrowIfNull(request);
         ValidateIdentifier(request.ActorId, nameof(request.ActorId), 255);
         if (request.SessionId is not null)
@@ -73,12 +78,23 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, "session.add_event", cancellationToken).ConfigureAwait(false);
         var content = await response.Content.ReadFromJsonAsync<AddSessionEventResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);
-        return content?.Event ?? throw new InvalidDataException("Agent Memory returned no event.");
+        var result = content?.Event ?? throw new InvalidDataException("Agent Memory returned no event.");
+        AgentMemoryDiagnostics.SetSuccess(activity, 1);
+        return result;
+        }
+        catch (Exception exception)
+        {
+            AgentMemoryDiagnostics.SetError(activity, exception);
+            throw;
+        }
     }
 
     /// <inheritdoc />
     public async Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default)
     {
+        using var activity = AgentMemoryDiagnostics.StartActivity("session.load", this._endpoint);
+        try
+        {
         ValidateIdentifier(sessionId, nameof(sessionId), 255);
         var path = $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}";
         if (includeSummarizedEvents)
@@ -86,7 +102,15 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             path += "?includeSummarisedEvents=true";
         }
 
-        return await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
+        var result = await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
+        AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
+        return result;
+        }
+        catch (Exception exception)
+        {
+            AgentMemoryDiagnostics.SetError(activity, exception);
+            throw;
+        }
     }
 
     /// <inheritdoc />
@@ -121,6 +145,9 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     /// <inheritdoc />
     public async Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default)
     {
+        using var activity = AgentMemoryDiagnostics.StartActivity("ltm.search", this._endpoint);
+        try
+        {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Limit is < 1 or > 100)
         {
@@ -136,8 +163,16 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         message.Content = JsonContent.Create(request, options: JsonOptions);
         using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, "ltm.search", cancellationToken).ConfigureAwait(false);
-        return await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
+        var result = await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidDataException("Agent Memory returned no search result.");
+        AgentMemoryDiagnostics.SetSuccess(activity, result.Items.Count);
+        return result;
+        }
+        catch (Exception exception)
+        {
+            AgentMemoryDiagnostics.SetError(activity, exception);
+            throw;
+        }
     }
 
     private async Task<SessionEvent> GetEventAsync(string sessionId, string eventId, CancellationToken cancellationToken)
