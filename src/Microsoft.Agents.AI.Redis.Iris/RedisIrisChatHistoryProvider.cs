@@ -35,6 +35,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
 {
     private readonly IRedisAgentMemoryClient _client;
     private readonly RedisIrisMessageMapper _mapper;
+    private readonly RedisIrisSessionEventWriter _eventWriter;
     private readonly ProviderSessionState<RedisIrisProviderState> _sessionState;
     private readonly int? _maxMessagesToRetrieve;
     private IReadOnlyList<string>? _stateKeys;
@@ -44,7 +45,8 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
         IRedisAgentMemoryClient client,
         Func<AgentSession?, RedisIrisProviderState> stateInitializer,
         RedisIrisMessageMapper? mapper = null,
-        RedisIrisChatHistoryProviderOptions? options = null)
+        RedisIrisChatHistoryProviderOptions? options = null,
+        RedisIrisSessionEventWriter? eventWriter = null)
         : base(
             options?.ProvideOutputMessageFilter,
             options?.StoreInputRequestMessageFilter ?? ExternalMessagesOnly,
@@ -60,6 +62,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
 
         this._client = client;
         this._mapper = mapper ?? new RedisIrisMessageMapper();
+        this._eventWriter = eventWriter ?? new RedisIrisSessionEventWriter(client, RedisIrisEventWriter.ChatHistoryProvider, this._mapper);
         this._sessionState = new ProviderSessionState<RedisIrisProviderState>(stateInitializer, options.StateKey, options.JsonSerializerOptions);
         this._maxMessagesToRetrieve = options.MaxMessagesToRetrieve;
     }
@@ -99,15 +102,11 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask StoreChatHistoryAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
-        foreach (var message in context.RequestMessages.Concat(context.ResponseMessages ?? []))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var request = this._mapper.ToSessionEventRequest(message, state.SessionId, state.OwnerId, state.AgentId);
-            if (request is not null)
-            {
-                await this._client.AddSessionEventAsync(request, cancellationToken).ConfigureAwait(false);
-            }
-        }
+        await this._eventWriter.WriteAsync(
+            RedisIrisEventWriter.ChatHistoryProvider,
+            context.RequestMessages.Concat(context.ResponseMessages ?? []),
+            state,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static IEnumerable<ChatMessage> ExternalMessagesOnly(IEnumerable<ChatMessage> messages) =>
