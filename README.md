@@ -8,8 +8,8 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 
 - [Integration design](INTEGRATION_DESIGN.md)
 - [Product requirements and story backlog](tasks/prd-redis-iris-ms-agent-framework-integration.md)
+- [Local integration environment](LOCAL_DEVELOPMENT.md)
 
 ## Current status
 
 The repository is in planning and contract-validation phase. No production connector implementation has been started yet.
-

@@ -37,6 +37,7 @@ Both entry points will use the same local MCP client, authentication, connection
 - Epic 0A: Production API contract
 - Epic 0B: Shared .NET client foundation
 - Epic 0C: Security and observability conventions
+- Epic 0D: Managed-service local integration environment
 
 ### Milestone 1: .NET Agent Memory MVP
 
@@ -155,6 +156,51 @@ Both entry points will use the same local MCP client, authentication, connection
 - [ ] Test determinism, allowed characters, length bounds, and representative collision resistance.
 - [ ] Require authorization before accepting caller-controlled store or tenant selection.
 - [ ] Document that storage normalization is not a substitute for application authorization.
+
+#### US-007: Create the managed-service Docker integration environment
+
+**Epic:** 0D — Managed-service local integration environment
+**Description:** As a connector developer, I want both Iris products hosted as managed services while repository-owned dependencies run in Docker so that local testing is production-representative without requiring local Kubernetes.
+
+**Acceptance Criteria:**
+
+- [ ] Add Docker Compose profiles named `managed`, `offline`, and `observability`.
+- [ ] The `managed` profile runs the sample/test application and local observability stack while connecting to managed Agent Memory and Context Retriever.
+- [ ] The `offline` profile replaces managed endpoints with an Agent Memory REST fake and a local MCP fake.
+- [ ] The `observability` profile runs the OTel Collector, Prometheus, Tempo, and Grafana without requiring the application container.
+- [ ] Add `.env.example` with variable names and safe placeholder values but no secrets.
+- [ ] Validate required managed-profile configuration before tests begin.
+- [ ] Document that self-managed Iris and local Kubernetes are not default developer prerequisites.
+- [ ] Docker configuration validates and all containers report healthy.
+
+#### US-008: Seed and clean managed synthetic test data
+
+**Epic:** 0D — Managed-service local integration environment
+**Description:** As a test maintainer, I want repeatable synthetic data setup and cleanup so that managed integration tests are isolated and cannot affect customer or production data.
+
+**Acceptance Criteria:**
+
+- [ ] Seed a documented synthetic Context Retriever entity model, records, access tags, and least-privilege agent keys.
+- [ ] Generate a unique run prefix for owners, sessions, namespaces, and seeded entity identifiers.
+- [ ] Provide reset tooling that deletes only data associated with the current run prefix.
+- [ ] Clean both session and long-term Agent Memory data; do not assume session deletion removes promoted LTM.
+- [ ] Cleanup executes after success, failure, and CI cancellation where supported.
+- [ ] Forked or untrusted pull requests cannot access managed-service credentials.
+- [ ] Tests prove concurrent run prefixes cannot read or delete each other's data.
+
+#### US-009: Provide one-command local environment lifecycle
+
+**Epic:** 0D — Managed-service local integration environment
+**Description:** As a developer, I want one command surface for setup, testing, inspection, reset, and teardown so that the integration environment is reproducible.
+
+**Acceptance Criteria:**
+
+- [ ] Provide commands for `up managed`, `up offline`, `up observability`, `seed`, `test`, `reset`, and `down`.
+- [ ] Commands fail with actionable messages when Docker, configuration, network access, or credentials are unavailable.
+- [ ] `down` stops local containers without deleting managed data implicitly.
+- [ ] `reset` requires a resolved test-run prefix and refuses an empty or broad deletion scope.
+- [ ] The README links to the complete local-development guide.
+- [ ] CI invokes the same commands developers use locally.
 
 ### Milestone 1: .NET Agent Memory MVP
 
@@ -744,4 +790,3 @@ Both must delegate to the same client factory and tool conversion layer. Documen
 10. Should Redis publish the framework-neutral .NET Agent Memory and Context Retriever clients as independent supported packages?
 11. Which package names and namespaces are acceptable for eventual Microsoft Agent Framework upstream contribution?
 12. Which current OpenTelemetry generative-AI semantic conventions should be adopted versus isolated behind connector-owned attributes while the conventions evolve?
-
