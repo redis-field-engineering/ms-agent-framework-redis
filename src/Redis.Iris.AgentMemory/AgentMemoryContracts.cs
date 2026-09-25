@@ -87,12 +87,30 @@ public sealed record StringFilter
     /// <summary>Gets an equality constraint.</summary>
     public string? Eq { get; init; }
 
+    /// <summary>Gets an inequality constraint.</summary>
+    public string? Ne { get; init; }
+
     /// <summary>Gets an any-of constraint.</summary>
     [JsonPropertyName("in")]
     public IReadOnlyList<string>? In { get; init; }
 
     /// <summary>Gets an all-values constraint.</summary>
     public IReadOnlyList<string>? All { get; init; }
+}
+
+/// <summary>Filters an ISO-8601 timestamp.</summary>
+public sealed record DateTimeFilter
+{
+    /// <summary>Gets an exclusive lower bound.</summary>
+    public DateTimeOffset? Gt { get; init; }
+    /// <summary>Gets an inclusive lower bound.</summary>
+    public DateTimeOffset? Gte { get; init; }
+    /// <summary>Gets an exclusive upper bound.</summary>
+    public DateTimeOffset? Lt { get; init; }
+    /// <summary>Gets an inclusive upper bound.</summary>
+    public DateTimeOffset? Lte { get; init; }
+    /// <summary>Gets an equality constraint.</summary>
+    public DateTimeOffset? Eq { get; init; }
 }
 
 /// <summary>Filters applied by the Agent Memory service before ranking.</summary>
@@ -107,11 +125,20 @@ public sealed record LongTermMemoryFilter
     /// <summary>Gets the deprecated namespace-label constraint.</summary>
     public StringFilter? Namespace { get; init; }
 
+    /// <summary>Gets the stable namespace-resource constraint.</summary>
+    public StringFilter? NamespaceRef { get; init; }
+
+    /// <summary>Gets whether only memories with no namespace placement should match.</summary>
+    public bool? Unnamespaced { get; init; }
+
     /// <summary>Gets the topic constraint.</summary>
     public StringFilter? Topics { get; init; }
 
     /// <summary>Gets the memory-type constraint.</summary>
     public StringFilter? MemoryType { get; init; }
+
+    /// <summary>Gets the creation-time constraint.</summary>
+    public DateTimeFilter? CreatedAt { get; init; }
 }
 
 /// <summary>A request to search long-term memory.</summary>
