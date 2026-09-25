@@ -7,4 +7,7 @@
     <Project Path="tests/Redis.Iris.AgentMemory.Tests/Redis.Iris.AgentMemory.Tests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Redis.Iris.Tests/Microsoft.Agents.AI.Redis.Iris.Tests.csproj" />
   </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/RedisIrisPersistentAgent/RedisIrisPersistentAgent.csproj" />
+  </Folder>
 </Solution>
