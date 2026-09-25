@@ -20,6 +20,7 @@ OPENAI_MODEL="gpt-4.1-mini"
 SAMPLE_OWNER_ID="redis-iris-demo-shopper"
 REDIS_IRIS_PROMOTION_TIMEOUT_MINUTES="8"
 REDIS_IRIS_SHORT_TERM_WINDOW="4"
+REDIS_IRIS_DEMO_TELEMETRY="false"
 ```
 
 Do not commit `.env.local`. Use only a dedicated development store with synthetic data.
@@ -44,7 +45,13 @@ For an unattended end-to-end run, including bounded polling for promotion:
 ./scripts/run-agent-memory-demo.sh full
 ```
 
-The output labels user and assistant turns, promoted memory content, connector traces, and low-cardinality metrics. The owner scope comes from trusted application configuration rather than model-generated input.
+By default, the output focuses on user and assistant turns plus the memory layers. The owner scope comes from trusted application configuration rather than model-generated input.
+
+To include connector traces and low-cardinality metrics in an observability-focused demonstration, opt in with:
+
+```dotenv
+REDIS_IRIS_DEMO_TELEMETRY="true"
+```
 
 During `teach` and `full`, the demo prints three distinct memory views:
 

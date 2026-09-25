@@ -27,8 +27,9 @@ var ownerId = Environment.GetEnvironmentVariable("SAMPLE_OWNER_ID") ?? "redis-ir
 var model = Environment.GetEnvironmentVariable("OPENAI_MODEL") ?? "gpt-4.1-mini";
 var promotionTimeout = TimeSpan.FromMinutes(ParsePositiveDouble("REDIS_IRIS_PROMOTION_TIMEOUT_MINUTES", 8));
 var shortTermWindow = ParsePositiveInt("REDIS_IRIS_SHORT_TERM_WINDOW", 4);
+var showTelemetry = ParseBoolean("REDIS_IRIS_DEMO_TELEMETRY", false);
 
-using var telemetry = StartConsoleTelemetry();
+using var telemetry = showTelemetry ? StartConsoleTelemetry() : null;
 Console.WriteLine("=== Redis Iris Agent Memory + Microsoft Agent Framework ===");
 Console.WriteLine($"Mode: {command}; Owner: {ownerId}; Model: {model}; Short-term window: {shortTermWindow} messages\n");
 
@@ -217,6 +218,19 @@ static int ParsePositiveInt(string name, int fallback)
     return int.TryParse(value, out var parsed) && parsed > 0
         ? parsed
         : throw new InvalidOperationException($"{name} must be a positive integer.");
+}
+
+static bool ParseBoolean(string name, bool fallback)
+{
+    var value = Environment.GetEnvironmentVariable(name);
+    if (value is null)
+    {
+        return fallback;
+    }
+
+    return bool.TryParse(value, out var parsed)
+        ? parsed
+        : throw new InvalidOperationException($"{name} must be true or false.");
 }
 
 static IDisposable StartConsoleTelemetry()
