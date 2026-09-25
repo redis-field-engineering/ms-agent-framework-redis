@@ -1,0 +1,8 @@
+bin/
+obj/
+TestResults/
+.env
+.env.local
+*.user
+*.suo
+.DS_Store

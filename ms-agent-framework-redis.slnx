@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Redis.Iris.AgentMemory/Redis.Iris.AgentMemory.csproj" />
+    <Project Path="src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Redis.Iris.AgentMemory.Tests/Redis.Iris.AgentMemory.Tests.csproj" />
+    <Project Path="tests/Microsoft.Agents.AI.Redis.Iris.Tests/Microsoft.Agents.AI.Redis.Iris.Tests.csproj" />
+  </Folder>
+</Solution>
