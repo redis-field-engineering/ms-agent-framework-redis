@@ -43,5 +43,6 @@ public sealed class RedisIrisServiceCollectionExtensionsTests
         options.Credential = "test-secret";
         options.UseChatHistoryProvider = useHistory;
         options.IdentityResolver = _ => new("tenant", "owner", "session", "actor", "agent", "namespace", ["topic"]);
+        options.AuthorizationPolicy = _ => true;
     }
 }

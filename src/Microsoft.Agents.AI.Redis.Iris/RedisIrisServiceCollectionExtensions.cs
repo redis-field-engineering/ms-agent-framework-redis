@@ -38,6 +38,8 @@ public sealed class RedisIrisAgentMemoryOptions
     public IAgentMemoryCredentialProvider? CredentialProvider { get; set; }
     /// <summary>Gets or sets the required identity resolver, including tenant, owner, session, actor, agent, namespace, and topics.</summary>
     public Func<AgentSession?, RedisIrisIdentityContext>? IdentityResolver { get; set; }
+    /// <summary>Gets or sets the required host authorization callback for resolved identities.</summary>
+    public Func<RedisIrisIdentityContext, bool>? AuthorizationPolicy { get; set; }
     /// <summary>Gets or sets whether the chat-history provider is registered.</summary>
     public bool UseChatHistoryProvider { get; set; } = true;
     /// <summary>Gets or sets history-load failure behavior.</summary>
@@ -84,7 +86,13 @@ public static class RedisIrisServiceCollectionExtensions
 
         Func<AgentSession?, RedisIrisProviderState> stateInitializer = session =>
         {
-            var identity = options.IdentityResolver!(session) ?? throw new InvalidOperationException("IdentityResolver returned null.");
+            var identity = options.IdentityResolver!(session) ?? throw new UnauthorizedAccessException("IdentityResolver could not resolve an identity.");
+            ValidateIdentity(identity);
+            if (!options.AuthorizationPolicy!(identity))
+            {
+                throw new UnauthorizedAccessException("The host application denied the resolved Redis Iris identity.");
+            }
+
             return new(identity.SessionId, identity.OwnerId, identity.AgentId);
         };
 
@@ -131,6 +139,11 @@ public static class RedisIrisServiceCollectionExtensions
             throw new ArgumentException("IdentityResolver is required.", nameof(options.IdentityResolver));
         }
 
+        if (options.AuthorizationPolicy is null)
+        {
+            throw new ArgumentException("AuthorizationPolicy is required.", nameof(options.AuthorizationPolicy));
+        }
+
         if (options.Memory.Search.SimilarityThreshold is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(options.Memory.Search.SimilarityThreshold), "SimilarityThreshold must be between 0 and 1.");
@@ -139,6 +152,18 @@ public static class RedisIrisServiceCollectionExtensions
         if (options.Memory.Search.Limit is < 1 or > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(options.Memory.Search.Limit), "Limit must be between 1 and 100.");
+        }
+    }
+
+    private static void ValidateIdentity(RedisIrisIdentityContext identity)
+    {
+        if (string.IsNullOrWhiteSpace(identity.TenantId) ||
+            string.IsNullOrWhiteSpace(identity.OwnerId) ||
+            string.IsNullOrWhiteSpace(identity.SessionId) ||
+            string.IsNullOrWhiteSpace(identity.ActorId) ||
+            string.IsNullOrWhiteSpace(identity.AgentId))
+        {
+            throw new UnauthorizedAccessException("The trusted identity resolver returned an incomplete identity.");
         }
     }
 }
