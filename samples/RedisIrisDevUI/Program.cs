@@ -36,6 +36,7 @@ builder.Services.AddRedisIrisAgentMemory(options =>
         identity.TenantId == "redis-iris-devui" && identity.OwnerId == ownerId;
     options.ChatHistory.MaxMessagesToRetrieve = shortTermWindow;
     options.Memory.Search = new() { Limit = 5, SimilarityThreshold = 0.55 };
+    options.Memory.EnableSensitiveLogging = true;
     options.RecallFailurePolicy = RedisIrisFailurePolicy.FailClosed;
 });
 

@@ -16,3 +16,5 @@ Metrics:
 | `redis.iris.messages.skipped` | Counter | `{message}` | bounded reason |
 
 All metric attributes are bounded enums. Do not add endpoint, tenant, owner, session, actor, memory, query, or message content as metric dimensions.
+
+`RedisIrisMemoryProvider` emits structured application logs for recall start and result count. Query text, identity values, memory IDs, source session IDs, and memory text are logged only when `RedisIrisMemoryProviderOptions.EnableSensitiveLogging` is explicitly enabled. This switch is intended for controlled development diagnostics and remains disabled by default. Sensitive recall fields are never added to traces or metrics.

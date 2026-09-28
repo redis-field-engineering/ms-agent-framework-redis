@@ -3,6 +3,7 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Redis.Iris.AgentMemory;
 
 namespace Microsoft.Agents.AI.Redis.Iris.Tests;
@@ -50,8 +51,28 @@ public sealed class RedisIrisMemoryProviderTests
             await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "hello")])).AsTask());
     }
 
-    private static RedisIrisMemoryProvider Provider(SearchClient client, RedisIrisMemoryProviderOptions options) =>
-        new(new RedisIrisLongTermMemorySearch(client), _ => new("session", "owner", "agent"), options);
+    [Fact]
+    public async Task SensitiveRecallLoggingIsExplicitAndIncludesQueryAndMemories()
+    {
+        var logger = new RecordingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logger));
+        var provider = Provider(
+            new SearchClient(new LongTermMemorySearchResult([Memory("memory-one", "prefers tea")])),
+            new() { EnableSensitiveLogging = true },
+            loggerFactory);
+
+        await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "what do I like?")]));
+
+        Assert.Contains(logger.Messages, message => message.Contains("Query=what do I like?", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, message => message.Contains("MemoryId=memory-one", StringComparison.Ordinal));
+        Assert.Contains(logger.Messages, message => message.Contains("Text=prefers tea", StringComparison.Ordinal));
+    }
+
+    private static RedisIrisMemoryProvider Provider(
+        SearchClient client,
+        RedisIrisMemoryProviderOptions options,
+        ILoggerFactory? loggerFactory = null) =>
+        new(new RedisIrisLongTermMemorySearch(client), _ => new("session", "owner", "agent"), options, loggerFactory: loggerFactory);
 
     private static LongTermMemoryRecord Memory(string id, string text) =>
         new(id, text, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, OwnerId: "owner");
@@ -72,6 +93,26 @@ public sealed class RedisIrisMemoryProviderTests
     }
 
     private sealed class StubSession : AgentSession;
+
+    private sealed class RecordingLoggerProvider : ILoggerProvider
+    {
+        public List<string> Messages { get; } = [];
+        public ILogger CreateLogger(string categoryName) => new RecordingLogger(this.Messages);
+        public void Dispose() { }
+
+        private sealed class RecordingLogger(List<string> messages) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter) => messages.Add(formatter(state, exception));
+        }
+    }
+
     private sealed class StubAgent : AIAgent
     {
         protected override ValueTask<AgentSession> CreateSessionCoreAsync(CancellationToken cancellationToken = default) => new(new StubSession());
