@@ -10,5 +10,6 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/RedisIrisPersistentAgent/RedisIrisPersistentAgent.csproj" />
+    <Project Path="samples/RedisIrisDevUI/RedisIrisDevUI.csproj" />
   </Folder>
 </Solution>

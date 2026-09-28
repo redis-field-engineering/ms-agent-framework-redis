@@ -12,6 +12,7 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 - [Security model](SECURITY.md)
 - [Observability](OBSERVABILITY.md)
 - [Persistent .NET sample](samples/RedisIrisPersistentAgent/README.md)
+- [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
 - [Testing and release quality gate](TESTING.md)
 
 ## Current status
