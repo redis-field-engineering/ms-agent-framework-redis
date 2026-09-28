@@ -31,7 +31,7 @@ REDIS_IRIS_DEMO_TELEMETRY="false"
 
 The application also prints `RAM USER` and `RAM SESSION` when it assigns a new Agent Framework session to RAM.
 
-For recall troubleshooting, this development-only sample enables sensitive `RedisIrisMemoryProvider` logs. Each agent turn prints the exact owner, session, search query, search settings, result count, and returned memory IDs/types/text. These logs can contain user data and must not be copied into a production configuration.
+For recall troubleshooting, `RedisIrisMemoryProvider` logs the number of long-term memory records returned by each search. Query text, identity, memory IDs, and memory content are not logged.
 
 ## Clear the demo owner
 

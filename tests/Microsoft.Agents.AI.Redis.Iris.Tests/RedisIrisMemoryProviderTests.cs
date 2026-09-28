@@ -52,20 +52,22 @@ public sealed class RedisIrisMemoryProviderTests
     }
 
     [Fact]
-    public async Task SensitiveRecallLoggingIsExplicitAndIncludesQueryAndMemories()
+    public async Task RecallLoggingIncludesOnlyResultCount()
     {
         var logger = new RecordingLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logger));
         var provider = Provider(
             new SearchClient(new LongTermMemorySearchResult([Memory("memory-one", "prefers tea")])),
-            new() { EnableSensitiveLogging = true },
+            new(),
             loggerFactory);
 
         await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "what do I like?")]));
 
-        Assert.Contains(logger.Messages, message => message.Contains("Query=what do I like?", StringComparison.Ordinal));
-        Assert.Contains(logger.Messages, message => message.Contains("MemoryId=memory-one", StringComparison.Ordinal));
-        Assert.Contains(logger.Messages, message => message.Contains("Text=prefers tea", StringComparison.Ordinal));
+        var message = Assert.Single(logger.Messages);
+        Assert.Contains("returned 1 memory record(s)", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("what do I like", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("memory-one", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("prefers tea", message, StringComparison.Ordinal);
     }
 
     private static RedisIrisMemoryProvider Provider(

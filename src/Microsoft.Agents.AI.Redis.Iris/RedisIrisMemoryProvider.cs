@@ -23,9 +23,6 @@ public sealed class RedisIrisMemoryProviderOptions
     public RedisIrisFailurePolicy WriteFailurePolicy { get; set; } = RedisIrisFailurePolicy.FailClosed;
     /// <summary>Gets or sets the provider state key.</summary>
     public string StateKey { get; set; } = nameof(RedisIrisMemoryProvider);
-    /// <summary>Gets or sets whether recall logs may contain identity, query, memory IDs, and memory text.</summary>
-    /// <remarks>Enable only in a controlled development environment. Defaults to <see langword="false"/>.</remarks>
-    public bool EnableSensitiveLogging { get; set; }
 }
 
 /// <summary>Supplies owner-scoped Redis Agent Memory recall through the Agent Framework context pipeline.</summary>
@@ -74,41 +71,10 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
         var requestMessages = context.RequestMessages.ToList();
-        var query = requestMessages
-            .Where(static message => message.Role == ChatRole.User && message.GetAgentRequestMessageSourceType() == AgentRequestMessageSourceType.External)
-            .Select(static message => message.Text)
-            .LastOrDefault(static value => !string.IsNullOrWhiteSpace(value));
-        this._logger?.LogInformation(
-            "Redis Iris recall starting with Limit={Limit}, SimilarityThreshold={SimilarityThreshold}, RequestMessageCount={RequestMessageCount}.",
-            this._options.Search.Limit,
-            this._options.Search.SimilarityThreshold,
-            requestMessages.Count);
-        if (this._options.EnableSensitiveLogging)
-        {
-            this._logger?.LogInformation(
-                "Redis Iris sensitive recall parameters: OwnerId={OwnerId}, SessionId={SessionId}, Query={Query}.",
-                state.OwnerId,
-                state.SessionId,
-                query);
-        }
-
         try
         {
             var result = await this._search.SearchAsync(state.OwnerId, requestMessages, this._options.Search, cancellationToken).ConfigureAwait(false);
             this._logger?.LogInformation("Redis Iris recall returned {MemoryCount} memory record(s).", result.Items.Count);
-            if (this._options.EnableSensitiveLogging)
-            {
-                foreach (var memory in result.Items)
-                {
-                    this._logger?.LogInformation(
-                        "Redis Iris sensitive recalled memory: MemoryId={MemoryId}, MemoryType={MemoryType}, SourceSessionId={SourceSessionId}, Text={MemoryText}.",
-                        memory.Id,
-                        memory.MemoryType,
-                        memory.SessionId,
-                        memory.Text);
-                }
-            }
-
             if (result.Items.Count == 0)
             {
                 return [];
