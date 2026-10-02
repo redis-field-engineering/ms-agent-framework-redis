@@ -2,6 +2,8 @@
 
 This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat plus owner-scoped RAM inspection and cleanup endpoints.
 
+The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. The store is intentionally unscoped and process-local because this is a single-user development sample; production hosting must use authenticated caller isolation and durable session storage.
+
 ## Run
 
 Add `OPENAI_API_KEY` to the repository root `.env.local`, then run:

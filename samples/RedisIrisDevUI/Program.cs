@@ -73,7 +73,8 @@ builder.AddAIAgent(AgentName, (services, name) =>
         },
         ChatHistoryProvider = services.GetRequiredService<RedisIrisChatHistoryProvider>(),
         AIContextProviders = [services.GetRequiredService<RedisIrisMemoryProvider>()],
-    }));
+    }))
+    .WithInMemorySessionStore(withIsolation: false);
 
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
