@@ -11,6 +11,7 @@
     <Project Path="tests/Redis.Iris.AgentMemory.LiveTests/Redis.Iris.AgentMemory.LiveTests.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/RedisIrisContextRetrieverFixed/RedisIrisContextRetrieverFixed.csproj" />
     <Project Path="samples/RedisIrisPersistentAgent/RedisIrisPersistentAgent.csproj" />
     <Project Path="samples/RedisIrisDevUI/RedisIrisDevUI.csproj" />
   </Folder>
