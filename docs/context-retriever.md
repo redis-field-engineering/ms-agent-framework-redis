@@ -13,3 +13,7 @@ Keep the shared `RedisContextRetrieverOptions` and client factory/cache. Replace
 Create least-privilege agent keys whose server-side access tags expose only the entities required by that application role. The connector does not recreate or broaden server authorization with client-side filters. Rotate by returning the new key and a new non-secret credential version from `IContextRetrieverCredentialProvider`; this forces a separate MCP session and tool discovery result.
 
 Production endpoints must use HTTPS. Plain HTTP is accepted only for loopback development. Automatic redirects and ambient HTTP cookies are disabled so credentials cannot be forwarded to another origin. Endpoint, profile, and credential selection come exclusively from trusted resolver code; model-generated tool arguments can neither select a tenant nor supply a key. Tool results remain untrusted data and must not be treated as instructions.
+
+## Metrics and alerts
+
+Subscribe to the `Redis.Iris.ContextRetriever` meter. It emits connection attempts/failures, discovery duration/failures, tool-call duration/failures, active connections, reconnects, and cache hit/miss. Dimensions never include tenant, session, endpoint, arguments, or results; tool name is intentionally omitted to make cardinality safe for dynamic schemas. Useful portable alerts include a sustained connection/discovery failure ratio, p95 discovery or tool latency above the application's timeout budget, and unexpected connection churn or cache misses.

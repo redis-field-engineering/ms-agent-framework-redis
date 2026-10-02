@@ -1,5 +1,6 @@
 using System.Net;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -121,6 +122,37 @@ public sealed class ContextRetrieverClientContractTests
         Assert.DoesNotContain("trace-secret", serialized);
         Assert.DoesNotContain("private-name", serialized);
         Assert.DoesNotContain("context.example.test", serialized);
+    }
+
+    [Fact]
+    public async Task MetricsCoverMcpHealthWithoutSensitiveDimensions()
+    {
+        var measurements = new List<(string Name, string Tags)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == ContextRetrieverDiagnostics.MeterName) meterListener.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => measurements.Add((instrument.Name, Tags(tags))));
+        listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) => measurements.Add((instrument.Name, Tags(tags))));
+        listener.Start();
+
+        var factory = new ContextRetrieverClientFactory(handlerFactory: () => new McpContractHandler(), loggerFactory: null);
+        await using (var client = await factory.ConnectAsync(s_options, "metric-secret"))
+        {
+            await Assert.Single(client.Tools).InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "metric-private" }));
+        }
+
+        Assert.Contains(measurements, item => item.Name == "redis.iris.context_retriever.connection.attempts");
+        Assert.Contains(measurements, item => item.Name == "redis.iris.context_retriever.discovery.duration");
+        Assert.Contains(measurements, item => item.Name == "redis.iris.context_retriever.tool.duration");
+        Assert.Contains(measurements, item => item.Name == "redis.iris.context_retriever.connections.active");
+        var serialized = string.Join('|', measurements.Select(item => item.Tags));
+        Assert.DoesNotContain("metric-secret", serialized);
+        Assert.DoesNotContain("metric-private", serialized);
+        Assert.DoesNotContain("context.example.test", serialized);
+
+        static string Tags(ReadOnlySpan<KeyValuePair<string, object?>> tags) => string.Join(',', tags.ToArray().Select(tag => $"{tag.Key}={tag.Value}"));
     }
 
     private sealed class McpContractHandler : HttpMessageHandler

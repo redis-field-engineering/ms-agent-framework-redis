@@ -16,12 +16,16 @@ internal sealed class TracingAIFunction(AIFunction inner) : AIFunction
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         using var activity = ContextRetrieverDiagnostics.Start("execute");
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
         try
         {
-            return await inner.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
+            var result = await inner.InvokeAsync(arguments, cancellationToken).ConfigureAwait(false);
+            ContextRetrieverDiagnostics.Tool(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, false);
+            return result;
         }
         catch (Exception ex)
         {
+            ContextRetrieverDiagnostics.Tool(System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, true);
             ContextRetrieverDiagnostics.Failed(activity, ex);
             throw;
         }

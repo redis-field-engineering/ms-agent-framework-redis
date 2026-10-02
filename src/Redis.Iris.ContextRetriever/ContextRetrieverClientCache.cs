@@ -38,11 +38,18 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
         await EvictExpiredAsync().ConfigureAwait(false);
         var key = new CacheKey(profile.Endpoint, profile.AccessProfileId, credential.Version);
         var now = _timeProvider.GetUtcNow();
-        var entry = _entries.GetOrAdd(key, _ => new CacheEntry(
+        var candidate = new CacheEntry(
             new Lazy<Task<IContextRetrieverClient>>(
                 () => _factory.ConnectAsync(clientOptions, credential.AgentKey, CancellationToken.None),
                 LazyThreadSafetyMode.ExecutionAndPublication),
-            now));
+            now);
+        var entry = _entries.GetOrAdd(key, candidate);
+        var hit = !ReferenceEquals(entry, candidate);
+        ContextRetrieverDiagnostics.Cache(hit);
+        if (!hit && _entries.Keys.Any(existing => existing.Endpoint == key.Endpoint && existing.AccessProfileId == key.AccessProfileId && existing != key))
+        {
+            ContextRetrieverDiagnostics.Reconnect();
+        }
         entry.LastAccess = now;
 
         try
