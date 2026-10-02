@@ -20,3 +20,10 @@ public sealed class ContextRetrieverDiscoveryException : ContextRetrieverExcepti
     /// <summary>Creates an exception.</summary>
     public ContextRetrieverDiscoveryException(string message, Exception? innerException = null) : base(message, innerException) { }
 }
+
+/// <summary>Raised when trusted application context does not authorize Context Retriever access.</summary>
+public sealed class ContextRetrieverAccessDeniedException : ContextRetrieverException
+{
+    /// <summary>Creates an exception.</summary>
+    public ContextRetrieverAccessDeniedException(string message, Exception? innerException = null) : base(message, innerException) { }
+}

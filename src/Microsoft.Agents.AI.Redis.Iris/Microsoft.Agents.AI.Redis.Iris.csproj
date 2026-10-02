@@ -12,6 +12,7 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="../Redis.Iris.AgentMemory/Redis.Iris.AgentMemory.csproj" />
+    <ProjectReference Include="../Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />

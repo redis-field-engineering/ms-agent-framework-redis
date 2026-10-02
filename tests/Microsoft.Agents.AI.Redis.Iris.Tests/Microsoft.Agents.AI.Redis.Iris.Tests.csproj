@@ -11,5 +11,6 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <ProjectReference Include="../../src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
+    <ProjectReference Include="../../src/Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
   </ItemGroup>
 </Project>
