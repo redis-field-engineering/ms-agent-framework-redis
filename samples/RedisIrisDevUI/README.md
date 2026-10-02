@@ -1,6 +1,6 @@
 # Redis Iris Agent Memory DevUI
 
-This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat plus owner-scoped RAM inspection and cleanup endpoints.
+This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat, owner-scoped RAM inspection and cleanup endpoints, and an annotated structured-context model for a travel agency.
 
 The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. The store is intentionally unscoped and process-local because this is a single-user development sample; production hosting must use authenticated caller isolation and durable session storage.
 
@@ -13,6 +13,23 @@ Add `OPENAI_API_KEY` to the repository root `.env.local`, then run:
 ```
 
 Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or [http://localhost:5080/devui](http://localhost:5080/devui) for the Agent Framework DevUI.
+
+## Inspect the structured travel model
+
+The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`.
+
+| Surface | Purpose |
+| --- | --- |
+| `/api/context/model` | Inspect or download the generated Context Retriever DataModel |
+| `/api/context/examples` | Inspect representative POCO records and their foreign-key relationships |
+
+This is deliberately a preview boundary: starting the DevUI neither creates a managed Context Retriever surface nor inserts the example records. Surface deployment remains an administrative operation, and application data should be written through its normal system-of-record path.
+
+The model can also be generated without Redis or OpenAI credentials:
+
+```bash
+dotnet run --project samples/RedisIrisDevUI -- --print-context-model
+```
 
 ## Run the Docker observability demo
 

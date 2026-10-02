@@ -12,9 +12,16 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Redis.Iris.AgentMemory;
+using Redis.Iris.ContextRetriever.Modeling;
 using RedisIrisDevUI;
 
 const string AgentName = "redis-iris-travel-assistant";
+
+if (args.Contains("--print-context-model", StringComparer.Ordinal))
+{
+    Console.Write(ContextDataModelJson.Serialize(TravelContext.Model));
+    return;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("System.Net.Http.HttpClient.Redis.Iris.AgentMemory", LogLevel.Warning);
@@ -27,6 +34,7 @@ var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 var identityResolver = new RamIdentityResolver(ownerId);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+var travelContextModel = TravelContext.Model;
 
 if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 {
@@ -45,6 +53,7 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 }
 
 builder.Services.AddSingleton(identityResolver);
+builder.Services.AddSingleton(travelContextModel);
 builder.Services.AddChatClient(new OpenAIClient(openAiApiKey).GetChatClient(model).AsIChatClient());
 builder.Services.AddRedisIrisAgentMemory(options =>
 {
@@ -114,6 +123,11 @@ app.MapGet("/api/ram", async (IRedisAgentMemoryClient client, CancellationToken 
         note = "Session IDs are generated from trusted application state, not model input.",
     });
 });
+
+app.MapGet("/api/context/model", (ContextDataModel contextModel) =>
+    Results.Text(ContextDataModelJson.Serialize(contextModel), "application/json"));
+
+app.MapGet("/api/context/examples", () => Results.Ok(TravelContext.Examples));
 
 app.MapGet("/api/ram/sessions/{sessionId}", async (
     string sessionId,
@@ -214,7 +228,7 @@ static string Dashboard(string ownerId, int shortTermWindow) => $$"""
     <head><meta charset="utf-8"><title>Redis Iris + Microsoft Agent Framework</title></head>
     <body style="font-family:system-ui;max-width:850px;margin:3rem auto;padding:0 1rem;line-height:1.5">
       <h1>Redis Iris + Microsoft Agent Framework</h1>
-      <p>This local sample hosts a travel assistant in Microsoft's official DevUI and persists its memory in Redis Agent Memory.</p>
+      <p>This local sample hosts a travel assistant in Microsoft's official DevUI, persists its memory in Redis Agent Memory, and defines structured travel context for Redis Context Retriever.</p>
       <dl>
         <dt><strong>RAM user/owner</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(ownerId)}}</code></dd>
         <dt><strong>Short-term window</strong></dt><dd>{{shortTermWindow}} recent messages</dd>
@@ -230,6 +244,13 @@ static string Dashboard(string ownerId, int shortTermWindow) => $$"""
       <h2>RAM inspection</h2>
       <p><a href="/api/ram">List this owner's sessions and long-term memories as JSON</a>.</p>
       <p>Inspect one session, including its summary and events, at <code>/api/ram/sessions/{sessionId}</code>.</p>
+      <h2>Structured travel context</h2>
+      <p>The sample defines annotated POCOs for travelers, flight reservations, hotel reservations, and travel receipts.</p>
+      <ul>
+        <li><a href="/api/context/model">View the generated Context Retriever DataModel</a></li>
+        <li><a href="/api/context/examples">View representative structured records</a></li>
+      </ul>
+      <p>These endpoints preview the application contract; they do not provision a surface or write example records.</p>
       <h2>Cleanup</h2>
       <p>Delete both memory tiers with an explicit owner confirmation:</p>
       <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(ownerId)}}'</pre>
