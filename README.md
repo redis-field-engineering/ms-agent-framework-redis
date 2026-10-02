@@ -12,6 +12,8 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 - [Security model](SECURITY.md)
 - [Observability](OBSERVABILITY.md)
 - [Context Retriever integration](docs/context-retriever.md)
+- [Context Retriever POCO modeling](docs/context-retriever-modeling.md)
+- [Context Retriever model sample](samples/RedisIrisContextModel/README.md)
 - [Persistent .NET sample](samples/RedisIrisPersistentAgent/README.md)
 - [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
 - [C# Jupyter notebooks](notebooks/csharp/README.md)
