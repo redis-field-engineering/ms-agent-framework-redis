@@ -22,6 +22,11 @@ public sealed class ContextRetrieverClientOptions
             throw new ArgumentException("Context Retriever endpoint must be an absolute HTTP or HTTPS URI.", nameof(Endpoint));
         }
 
+        if (Endpoint.Scheme == Uri.UriSchemeHttp && !Endpoint.IsLoopback)
+        {
+            throw new ArgumentException("Unencrypted Context Retriever endpoints are allowed only on loopback.", nameof(Endpoint));
+        }
+
         if (string.IsNullOrWhiteSpace(AgentKeyHeaderName))
         {
             throw new ArgumentException("Agent key header name is required.", nameof(AgentKeyHeaderName));

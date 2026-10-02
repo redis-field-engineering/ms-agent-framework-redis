@@ -92,7 +92,13 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
     {
         if (_handlerFactory is null)
         {
-            return new HttpClientTransport(options, _loggerFactory);
+            var secureHandler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false,
+            };
+            var secureHttpClient = new HttpClient(secureHandler, disposeHandler: true);
+            return new HttpClientTransport(options, secureHttpClient, _loggerFactory, ownsHttpClient: true);
         }
 
         var handler = _handlerFactory();

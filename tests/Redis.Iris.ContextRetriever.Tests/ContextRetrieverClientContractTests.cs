@@ -69,6 +69,27 @@ public sealed class ContextRetrieverClientContractTests
         Assert.All(handlers, handler => Assert.Contains("initialize", handler.Methods));
     }
 
+    [Fact]
+    public async Task RejectsInsecureRemoteEndpoints()
+    {
+        var factory = new ContextRetrieverClientFactory();
+        var options = new ContextRetrieverClientOptions { Endpoint = new Uri("http://context.example.test/mcp") };
+
+        await Assert.ThrowsAsync<ArgumentException>(() => factory.ConnectAsync(options, "key"));
+    }
+
+    [Fact]
+    public async Task RedirectDoesNotForwardAgentKey()
+    {
+        var handler = new RedirectHandler();
+        var factory = new ContextRetrieverClientFactory(handlerFactory: () => handler, loggerFactory: null);
+
+        var error = await Assert.ThrowsAsync<ContextRetrieverConnectionException>(() => factory.ConnectAsync(s_options, "redirect-secret"));
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.DoesNotContain("redirect-secret", error.ToString());
+    }
+
     private sealed class McpContractHandler : HttpMessageHandler
     {
         public bool BlockInitialize { get; init; }
@@ -106,6 +127,19 @@ public sealed class ContextRetrieverClientContractTests
             };
             response.Headers.TryAddWithoutValidation("Mcp-Session-Id", "contract-session");
             return response;
+        }
+    }
+
+    private sealed class RedirectHandler : HttpMessageHandler
+    {
+        public int RequestCount { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestCount++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
+            {
+                Headers = { Location = new Uri("https://attacker.example.test/mcp") },
+            });
         }
     }
 }
