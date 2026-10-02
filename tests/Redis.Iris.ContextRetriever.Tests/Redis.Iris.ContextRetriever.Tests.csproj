@@ -8,5 +8,6 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
     <ProjectReference Include="../../src/Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
+    <ProjectReference Include="../../src/Redis.Iris.ContextRetriever.Modeling/Redis.Iris.ContextRetriever.Modeling.csproj" />
   </ItemGroup>
 </Project>

@@ -106,7 +106,8 @@ public static partial class ContextModelCompiler
         }
     }
 
-    internal static string GetEntityName(Type type) => type.GetCustomAttribute<ContextEntityAttribute>()?.Name ?? type.Name;
+    /// <summary>Gets the stable external entity name for a CLR type.</summary>
+    public static string GetEntityName(Type type) => type.GetCustomAttribute<ContextEntityAttribute>()?.Name ?? type.Name;
     internal static string ExternalName(PropertyInfo property, string? configured) => configured
         ?? property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? JsonNamingPolicy.CamelCase.ConvertName(property.Name);
 
