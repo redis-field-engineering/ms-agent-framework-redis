@@ -9,6 +9,32 @@ namespace Redis.Iris.AgentMemory.Tests;
 public sealed class AgentMemoryTracingTests
 {
     [Fact]
+    public async Task TryLoadMissingSessionRecordsExpectedMiss()
+    {
+        Activity? stopped = null;
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == AgentMemoryDiagnostics.ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => stopped = activity,
+        };
+        ActivitySource.AddActivityListener(listener);
+        var client = new RedisAgentMemoryClient(new HttpClient(new StatusHandler(HttpStatusCode.NotFound)), new()
+        {
+            Endpoint = new("https://memory.example.test"),
+            StoreId = "store",
+        }, new FixedAgentMemoryCredentialProvider("token"));
+
+        var result = await client.TryGetSessionMemoryAsync("new-session");
+
+        Assert.Null(result);
+        Assert.NotNull(stopped);
+        Assert.Equal(ActivityStatusCode.Unset, stopped.Status);
+        Assert.Equal("not_found", stopped.GetTagItem("redis.iris.outcome"));
+        Assert.Equal(404, stopped.GetTagItem("http.response.status_code"));
+    }
+
+    [Fact]
     public async Task SearchSpanIsParentedAndContainsOnlyApprovedValues()
     {
         Activity? stopped = null;
@@ -61,5 +87,11 @@ public sealed class AgentMemoryTracingTests
             {
                 Content = new StringContent(response, Encoding.UTF8, "application/json"),
             });
+    }
+
+    private sealed class StatusHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(statusCode));
     }
 }

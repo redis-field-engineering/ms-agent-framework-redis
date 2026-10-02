@@ -4,6 +4,8 @@ The connector emits OpenTelemetry-compatible activities and .NET metrics under `
 
 Activities cover `session.load`, `session.write`, and `ltm.search`. Attributes are limited to operation, outcome, server address, HTTP status, result count, retry count, and error type. Response bodies, credentials, query text, identity values, store IDs, session IDs, and memory IDs are never recorded.
 
+An Agent Framework history lookup for a session that has not yet been created is recorded with `redis.iris.outcome=not_found` and HTTP status `404`, but an unset span status. It contributes to request and duration metrics, not `redis.iris.errors`. Direct `GetSessionMemoryAsync` calls retain normal not-found exception and error semantics.
+
 Metrics:
 
 | Instrument | Type | Unit | Attributes |

@@ -57,6 +57,16 @@ public sealed class RedisAgentMemoryClientTests
     }
 
     [Fact]
+    public async Task GetSessionMemoryAsyncStillThrowsForMissingSessionAsync()
+    {
+        var client = CreateClient(new RecordingHandler(_ => JsonResponse(HttpStatusCode.NotFound, "{}")));
+
+        var exception = await Assert.ThrowsAsync<AgentMemoryException>(() => client.GetSessionMemoryAsync("missing-session"));
+
+        Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+    }
+
+    [Fact]
     public async Task DeleteSessionEventAsyncUsesNestedEventPathAsync()
     {
         // Arrange

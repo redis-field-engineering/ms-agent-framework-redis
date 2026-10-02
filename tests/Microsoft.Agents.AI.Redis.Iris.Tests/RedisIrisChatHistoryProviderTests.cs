@@ -70,6 +70,20 @@ public sealed class RedisIrisChatHistoryProviderTests
     }
 
     [Fact]
+    public async Task MissingSessionIsTreatedAsEmptyHistory()
+    {
+        var client = new RecordingClient
+        {
+            Exception = new AgentMemoryException(System.Net.HttpStatusCode.NotFound, "session.get"),
+        };
+        var provider = Provider(client, new("new-session", "owner-a", "agent-a"));
+
+        var result = await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "first turn")]));
+
+        Assert.Equal("first turn", Assert.Single(result).Text);
+    }
+
+    [Fact]
     public void ProviderStateRoundTripsThroughJson()
     {
         var state = new RedisIrisProviderState("session-a", "owner-a", "agent-a");

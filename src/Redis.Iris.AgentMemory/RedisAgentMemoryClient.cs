@@ -93,7 +93,19 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     }
 
     /// <inheritdoc />
-    public async Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default)
+    public async Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default) =>
+        await this.GetSessionMemoryCoreAsync(sessionId, includeSummarizedEvents, notFoundIsMiss: false, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("A required session load returned no result.");
+
+    /// <inheritdoc />
+    public Task<SessionMemory?> TryGetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default) =>
+        this.GetSessionMemoryCoreAsync(sessionId, includeSummarizedEvents, notFoundIsMiss: true, cancellationToken);
+
+    private async Task<SessionMemory?> GetSessionMemoryCoreAsync(
+        string sessionId,
+        bool includeSummarizedEvents,
+        bool notFoundIsMiss,
+        CancellationToken cancellationToken)
     {
         using var activity = AgentMemoryDiagnostics.StartActivity("session.load", this._endpoint);
         var metricStart = AgentMemoryDiagnostics.StartRequest("session.load");
@@ -110,6 +122,12 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
             AgentMemoryDiagnostics.RecordMetricsSuccess("session.load", metricStart, result.Events.Count);
             return result;
+        }
+        catch (AgentMemoryException exception) when (notFoundIsMiss && exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            AgentMemoryDiagnostics.SetNotFound(activity);
+            AgentMemoryDiagnostics.RecordMetricsNotFound("session.load", metricStart);
+            return null;
         }
         catch (Exception exception)
         {

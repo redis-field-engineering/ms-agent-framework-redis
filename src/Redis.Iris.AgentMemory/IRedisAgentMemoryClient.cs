@@ -11,6 +11,19 @@ public interface IRedisAgentMemoryClient
     /// <summary>Gets the current state of a session.</summary>
     Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default);
 
+    /// <summary>Gets the current state of a session, or <see langword="null"/> when it has not been created.</summary>
+    async Task<SessionMemory?> TryGetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await this.GetSessionMemoryAsync(sessionId, includeSummarizedEvents, cancellationToken).ConfigureAwait(false);
+        }
+        catch (AgentMemoryException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Gets one event from a session.</summary>
     Task<SessionEvent> GetSessionEventAsync(string sessionId, string eventId, CancellationToken cancellationToken = default);
 

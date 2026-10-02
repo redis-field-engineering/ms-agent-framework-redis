@@ -60,6 +60,11 @@ public static class AgentMemoryDiagnostics
         ErrorCounter.Add(1, new KeyValuePair<string, object?>("redis.iris.operation", operation));
     }
 
+    internal static void RecordMetricsNotFound(string operation, long startedAt) =>
+        Duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            new KeyValuePair<string, object?>("redis.iris.operation", operation),
+            new KeyValuePair<string, object?>("redis.iris.outcome", "not_found"));
+
     /// <summary>Records a skipped message using a bounded reason.</summary>
     public static void RecordSkippedMessage(string reason) =>
         SkippedMessages.Add(1, new KeyValuePair<string, object?>("redis.iris.reason", reason));
@@ -82,5 +87,12 @@ public static class AgentMemoryDiagnostics
         }
 
         activity?.SetStatus(ActivityStatusCode.Error);
+    }
+
+    internal static void SetNotFound(Activity? activity)
+    {
+        activity?.SetTag("redis.iris.outcome", "not_found");
+        activity?.SetTag("http.response.status_code", 404);
+        activity?.SetTag("redis.iris.result_count", 0);
     }
 }

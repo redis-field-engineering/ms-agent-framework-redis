@@ -1,6 +1,5 @@
 // Copyright (c) Redis, Inc.
 
-using System.Net;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -86,18 +85,19 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
-        SessionMemory memory;
+        SessionMemory? memory;
         try
         {
-            memory = await this._client.GetSessionMemoryAsync(state.SessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-        catch (AgentMemoryException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
-        {
-            return [];
+            memory = await this._client.TryGetSessionMemoryAsync(state.SessionId, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (this._options.LoadFailurePolicy == RedisIrisFailurePolicy.FailOpen && exception is not OperationCanceledException)
         {
             this._logger?.LogWarning(exception, "Redis Iris history load failed; continuing without stored history.");
+            return [];
+        }
+
+        if (memory is null)
+        {
             return [];
         }
 

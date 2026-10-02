@@ -9,6 +9,38 @@ namespace Redis.Iris.AgentMemory.Tests;
 public sealed class AgentMemoryMetricsTests
 {
     [Fact]
+    public async Task TryLoadMissingSessionDoesNotIncrementErrors()
+    {
+        var measurements = new List<(string Instrument, object Value, KeyValuePair<string, object?>[] Tags)>();
+        using var listener = new MeterListener();
+        listener.InstrumentPublished = (instrument, meterListener) =>
+        {
+            if (instrument.Meter.Name == AgentMemoryDiagnostics.MeterName)
+            {
+                meterListener.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+            measurements.Add((instrument.Name, value, tags.ToArray())));
+        listener.SetMeasurementEventCallback<double>((instrument, value, tags, _) =>
+            measurements.Add((instrument.Name, value, tags.ToArray())));
+        listener.Start();
+        var client = new RedisAgentMemoryClient(new HttpClient(new StatusHandler(HttpStatusCode.NotFound)), new()
+        {
+            Endpoint = new("https://memory.example.test"),
+            StoreId = "store",
+        }, new FixedAgentMemoryCredentialProvider("token"));
+
+        var result = await client.TryGetSessionMemoryAsync("new-session");
+
+        Assert.Null(result);
+        Assert.DoesNotContain(measurements, static item => item.Instrument == "redis.iris.errors");
+        Assert.Contains(measurements, static item =>
+            item.Instrument == "redis.iris.operation.duration" &&
+            item.Tags.Any(static tag => tag.Key == "redis.iris.outcome" && Equals(tag.Value, "not_found")));
+    }
+
+    [Fact]
     public async Task SearchEmitsLowCardinalityMeasurements()
     {
         var measurements = new List<(string Instrument, object Value, KeyValuePair<string, object?>[] Tags)>();
@@ -52,5 +84,11 @@ public sealed class AgentMemoryMetricsTests
             {
                 Content = new StringContent("{\"items\":[]}", Encoding.UTF8, "application/json"),
             });
+    }
+
+    private sealed class StatusHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(statusCode));
     }
 }
