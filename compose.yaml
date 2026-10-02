@@ -1,6 +1,21 @@
 name: redis-iris-devui
 
 services:
+  context-provisioner:
+    profiles: ["context-retriever"]
+    build:
+      context: .
+      dockerfile: samples/RedisIrisDevUI/Dockerfile
+      target: context-provisioner
+    env_file:
+      - path: .env.local
+        required: true
+    environment:
+      CONTEXT_RETRIEVER_ARTIFACT_DIR: /artifacts/context-retriever
+    volumes:
+      - ./artifacts:/artifacts
+    restart: "no"
+
   devui:
     build:
       context: .

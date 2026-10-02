@@ -31,6 +31,30 @@ The model can also be generated without Redis or OpenAI credentials:
 dotnet run --project samples/RedisIrisDevUI -- --print-context-model
 ```
 
+## Provision the managed Context Retriever surface
+
+The optional one-shot Compose provisioner generates this model inside Docker, checks for a surface with the configured stable name, and creates it only when absent. Add these values to the ignored `.env.local` file:
+
+```dotenv
+CONTEXT_RETRIEVER_ADMIN_URL="https://your-context-retriever-control-plane"
+CONTEXT_RETRIEVER_ADMIN_KEY="cs_admin_..."
+CONTEXT_RETRIEVER_REDIS_ADDRESS="your-redis-host:port"
+CONTEXT_RETRIEVER_REDIS_USERNAME="default"
+CONTEXT_RETRIEVER_REDIS_PASSWORD="..."
+CONTEXT_RETRIEVER_REDIS_TLS="true"
+CONTEXT_RETRIEVER_SURFACE_NAME="redis-iris-travel-assistant"
+```
+
+Then run only the provisioner:
+
+```bash
+docker compose --profile context-retriever run --rm --build context-provisioner
+```
+
+The generated artifact is written to `artifacts/context-retriever/redis-iris-travel-context-model.json`. If exactly one surface with that name exists, the command exits successfully without changing it. To deliberately apply a newer generated model to that surface, set `CONTEXT_RETRIEVER_UPDATE_EXISTING=true`; duplicate names fail safely instead of selecting an arbitrary surface.
+
+The administrative URL/key above are control-plane credentials. The DevUI's runtime Context Retriever provider separately needs a least-privilege MCP endpoint and agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
+
 ## Run the Docker observability demo
 
 The repository-level Compose stack builds the DevUI and exports connector metrics and traces over OTLP to a local OpenTelemetry Collector:
