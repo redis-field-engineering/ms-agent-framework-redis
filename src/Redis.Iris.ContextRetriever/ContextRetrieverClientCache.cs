@@ -61,6 +61,11 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
             await TrimAsync(key).ConfigureAwait(false);
             return client;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested && !_shutdownToken.IsCancellationRequested)
+        {
+            // Cancel only this waiter. Shared initialization remains cached for other invocations.
+            throw;
+        }
         catch
         {
             _entries.TryRemove(new KeyValuePair<CacheKey, CacheEntry>(key, entry));

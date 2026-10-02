@@ -61,6 +61,22 @@ public sealed class ContextRetrieverClientCacheTests
         Assert.Equal(0, cache.GetHealth().ActiveClients);
     }
 
+    [Fact]
+    public async Task OneCancelledWaiterDoesNotCancelOrDuplicateSharedInitialization()
+    {
+        var factory = new ControlledFactory();
+        await using var cache = new ContextRetrieverClientCache(factory);
+        using var firstCancellation = new CancellationTokenSource();
+        var first = cache.GetAsync(Profile("shared"), new("secret", "v1"), Options(), firstCancellation.Token);
+        var second = cache.GetAsync(Profile("shared"), new("secret", "v1"), Options());
+
+        firstCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        factory.Release();
+        Assert.IsType<FakeClient>(await second);
+        Assert.Equal(1, factory.ConnectCount);
+    }
+
     private static ContextRetrieverAccessProfile Profile(string id) => new(new Uri("https://context.example.test/mcp"), id, new FixedContextRetrieverCredentialProvider(new("unused", "unused")));
     private static ContextRetrieverClientOptions Options() => new() { Endpoint = new Uri("https://context.example.test/mcp") };
 
@@ -91,6 +107,19 @@ public sealed class ContextRetrieverClientCacheTests
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             throw new InvalidOperationException("unreachable");
+        }
+    }
+
+    private sealed class ControlledFactory : IContextRetrieverClientFactory
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int ConnectCount { get; private set; }
+        public void Release() => _release.SetResult();
+        public async Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default)
+        {
+            ConnectCount++;
+            await _release.Task.WaitAsync(cancellationToken);
+            return new FakeClient();
         }
     }
 }
