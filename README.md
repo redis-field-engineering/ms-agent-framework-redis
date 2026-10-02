@@ -11,6 +11,7 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 - [Local integration environment](LOCAL_DEVELOPMENT.md)
 - [Security model](SECURITY.md)
 - [Observability](OBSERVABILITY.md)
+- [Context Retriever integration](docs/context-retriever.md)
 - [Persistent .NET sample](samples/RedisIrisPersistentAgent/README.md)
 - [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
 - [C# Jupyter notebooks](notebooks/csharp/README.md)
@@ -18,14 +19,15 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 
 ## Current status
 
-Milestone 1 implements the .NET Agent Memory client, Agent Framework chat-history and long-term-memory providers, guarded dependency-injection registration, authorization boundaries, and OpenTelemetry-compatible diagnostics.
+Milestones 1–3 implement the .NET Agent Memory client and Agent Framework providers plus Redis Context Retriever over local MCP. Context Retriever supports a recommended per-invocation identity provider and an explicitly owned fixed-service-identity helper over one principal-isolated MCP implementation, with authorization hardening, OpenTelemetry-compatible diagnostics, and bounded operational controls.
 
 ## Supported versions
 
 | Component | Supported baseline |
 | --- | --- |
 | .NET | 8.0 LTS |
-| Microsoft Agent Framework | 1.22.x |
+| Microsoft Agent Framework | 1.23.x |
 | Redis Agent Memory | Managed `/v1` data plane |
+| Redis Context Retriever | Managed local MCP endpoint |
 
-The connector intentionally pins Agent Framework 1.22.0 for reproducible builds. New minor versions must pass the complete quality gate before this matrix is updated.
+The connector intentionally pins Agent Framework 1.23.0 for reproducible builds. New minor versions must pass the complete quality gate before this matrix is updated.

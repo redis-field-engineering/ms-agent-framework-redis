@@ -55,6 +55,8 @@ Both entry points will use the same local MCP client, authentication, connection
 
 ### Milestone 3: .NET Context Retriever over local MCP
 
+**Implementation status:** Complete in the .NET connector. The managed live test remains environment-gated until a Context Retriever MCP endpoint and agent key are supplied; deterministic MCP protocol contracts cover the milestone in CI.
+
 - Epic 3A: Shared local MCP client
 - Epic 3B: Recommended context-provider integration
 - Epic 3C: Fixed-identity direct attachment
