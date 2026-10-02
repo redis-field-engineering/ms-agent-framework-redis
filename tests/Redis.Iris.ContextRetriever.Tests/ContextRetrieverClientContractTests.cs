@@ -155,10 +155,59 @@ public sealed class ContextRetrieverClientContractTests
         static string Tags(ReadOnlySpan<KeyValuePair<string, object?>> tags) => string.Join(',', tags.ToArray().Select(tag => $"{tag.Key}={tag.Value}"));
     }
 
+    [Fact]
+    public async Task DiscoveryAndExecutionHaveIndependentTimeouts()
+    {
+        var discoveryFactory = new ContextRetrieverClientFactory(handlerFactory: () => new McpContractHandler { BlockToolList = true }, loggerFactory: null);
+        var discoveryOptions = new ContextRetrieverClientOptions
+        {
+            Endpoint = s_options.Endpoint,
+            ConnectionTimeout = TimeSpan.FromSeconds(2),
+            DiscoveryTimeout = TimeSpan.FromMilliseconds(50),
+        };
+        var discoveryError = await Assert.ThrowsAsync<ContextRetrieverTimeoutException>(() => discoveryFactory.ConnectAsync(discoveryOptions, "key"));
+        Assert.Equal("tool discovery", discoveryError.Operation);
+
+        var executionFactory = new ContextRetrieverClientFactory(handlerFactory: () => new McpContractHandler { BlockToolCall = true }, loggerFactory: null);
+        var executionOptions = new ContextRetrieverClientOptions
+        {
+            Endpoint = s_options.Endpoint,
+            ExecutionTimeout = TimeSpan.FromMilliseconds(50),
+        };
+        await using var client = await executionFactory.ConnectAsync(executionOptions, "key");
+        var executionError = await Assert.ThrowsAsync<ContextRetrieverTimeoutException>(
+            () => Assert.Single(client.Tools).InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "Ada" })).AsTask());
+        Assert.Equal("tool execution", executionError.Operation);
+    }
+
+    [Fact]
+    public async Task BoundsConcurrentToolExecutionPerProfile()
+    {
+        var handler = new McpContractHandler { ToolDelay = TimeSpan.FromMilliseconds(40) };
+        var factory = new ContextRetrieverClientFactory(handlerFactory: () => handler, loggerFactory: null);
+        await using var client = await factory.ConnectAsync(new()
+        {
+            Endpoint = s_options.Endpoint,
+            MaximumConcurrentToolExecutions = 1,
+        }, "key");
+        var tool = Assert.Single(client.Tools);
+
+        await Task.WhenAll(
+            tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "one" })).AsTask(),
+            tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "two" })).AsTask());
+
+        Assert.Equal(1, handler.MaximumActiveToolCalls);
+    }
+
     private sealed class McpContractHandler : HttpMessageHandler
     {
         public bool BlockInitialize { get; init; }
         public bool ReturnInvalidToolList { get; init; }
+        public bool BlockToolList { get; init; }
+        public bool BlockToolCall { get; init; }
+        public TimeSpan ToolDelay { get; init; }
+        public int MaximumActiveToolCalls { get; private set; }
+        private int _activeToolCalls;
         public List<string> Methods { get; } = [];
         public List<string?> AuthorizationHeaders { get; } = [];
 
@@ -175,6 +224,18 @@ public sealed class ContextRetrieverClientContractTests
 
             if (method == "notifications/initialized") return new(HttpStatusCode.Accepted);
             if (method == "initialize" && BlockInitialize) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            if (method == "tools/list" && BlockToolList) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            if (method == "tools/call")
+            {
+                var active = Interlocked.Increment(ref _activeToolCalls);
+                MaximumActiveToolCalls = Math.Max(MaximumActiveToolCalls, active);
+                try
+                {
+                    if (BlockToolCall) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    if (ToolDelay > TimeSpan.Zero) await Task.Delay(ToolDelay, cancellationToken);
+                }
+                finally { Interlocked.Decrement(ref _activeToolCalls); }
+            }
 
             var id = root.GetProperty("id").GetRawText();
             var result = method switch

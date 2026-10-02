@@ -49,6 +49,18 @@ public sealed class ContextRetrieverClientCacheTests
         Assert.All(factory.Clients, client => Assert.True(client.Disposed));
     }
 
+    [Fact]
+    public async Task HostShutdownCancelsInitialization()
+    {
+        using var shutdown = new CancellationTokenSource();
+        await using var cache = new ContextRetrieverClientCache(new BlockingFactory(), shutdownToken: shutdown.Token);
+        var pending = cache.GetAsync(Profile("shutdown"), new("secret", "v1"), Options());
+        shutdown.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Equal(0, cache.GetHealth().ActiveClients);
+    }
+
     private static ContextRetrieverAccessProfile Profile(string id) => new(new Uri("https://context.example.test/mcp"), id, new FixedContextRetrieverCredentialProvider(new("unused", "unused")));
     private static ContextRetrieverClientOptions Options() => new() { Endpoint = new Uri("https://context.example.test/mcp") };
 
@@ -71,5 +83,14 @@ public sealed class ContextRetrieverClientCacheTests
         public IReadOnlyList<AIFunction> Tools => [];
         public bool Disposed { get; private set; }
         public ValueTask DisposeAsync() { Disposed = true; return ValueTask.CompletedTask; }
+    }
+
+    private sealed class BlockingFactory : IContextRetrieverClientFactory
+    {
+        public async Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
     }
 }

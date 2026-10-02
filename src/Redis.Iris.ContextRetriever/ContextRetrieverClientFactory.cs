@@ -79,10 +79,18 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
             using (var discoveryActivity = ContextRetrieverDiagnostics.Start("discover"))
             {
                 var discoveryStarted = Stopwatch.GetTimestamp();
+                using var discoveryTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                discoveryTimeout.CancelAfter(options.DiscoveryTimeout);
                 try
                 {
-                    tools = await client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    tools = await client.ListToolsAsync(cancellationToken: discoveryTimeout.Token).ConfigureAwait(false);
                     ContextRetrieverDiagnostics.Discovery(Stopwatch.GetElapsedTime(discoveryStarted).TotalMilliseconds, false);
+                }
+                catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && discoveryTimeout.IsCancellationRequested)
+                {
+                    ContextRetrieverDiagnostics.Discovery(Stopwatch.GetElapsedTime(discoveryStarted).TotalMilliseconds, true);
+                    ContextRetrieverDiagnostics.Failed(discoveryActivity, ex);
+                    throw new ContextRetrieverTimeoutException("tool discovery", ex);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -93,7 +101,8 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
             }
 
             ContextRetrieverDiagnostics.ActiveConnection(1);
-            return new ContextRetrieverClient(client, tools.Select(static tool => (AIFunction)new TracingAIFunction(tool)).ToArray());
+            var executionGate = new SemaphoreSlim(options.MaximumConcurrentToolExecutions, options.MaximumConcurrentToolExecutions);
+            return new ContextRetrieverClient(client, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
         }
         catch (ContextRetrieverException)
         {
@@ -127,7 +136,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         return new HttpClientTransport(options, httpClient, _loggerFactory, ownsHttpClient: true);
     }
 
-    private sealed class ContextRetrieverClient(McpClient client, IReadOnlyList<AIFunction> tools) : IContextRetrieverClient
+    private sealed class ContextRetrieverClient(McpClient client, IReadOnlyList<AIFunction> tools, SemaphoreSlim executionGate) : IContextRetrieverClient
     {
         private int _disposed;
         public IReadOnlyList<AIFunction> Tools { get; } = tools;
@@ -135,7 +144,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try { await client.DisposeAsync().ConfigureAwait(false); }
+            try { await client.DisposeAsync().ConfigureAwait(false); executionGate.Dispose(); }
             finally { ContextRetrieverDiagnostics.ActiveConnection(-1); }
         }
     }

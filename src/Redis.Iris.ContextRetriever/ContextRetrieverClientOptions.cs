@@ -14,6 +14,12 @@ public sealed class ContextRetrieverClientOptions
 
     /// <summary>Maximum time allowed to connect and initialize MCP.</summary>
     public TimeSpan ConnectionTimeout { get; init; } = TimeSpan.FromSeconds(15);
+    /// <summary>Maximum time allowed to discover the authorized tool set.</summary>
+    public TimeSpan DiscoveryTimeout { get; init; } = TimeSpan.FromSeconds(15);
+    /// <summary>Maximum time allowed for one tool execution.</summary>
+    public TimeSpan ExecutionTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>Maximum concurrent tool executions in one authorized protocol session.</summary>
+    public int MaximumConcurrentToolExecutions { get; init; } = 8;
 
     internal void Validate()
     {
@@ -36,5 +42,8 @@ public sealed class ContextRetrieverClientOptions
         {
             throw new ArgumentOutOfRangeException(nameof(ConnectionTimeout));
         }
+        if (DiscoveryTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(DiscoveryTimeout));
+        if (ExecutionTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(ExecutionTimeout));
+        if (MaximumConcurrentToolExecutions <= 0) throw new ArgumentOutOfRangeException(nameof(MaximumConcurrentToolExecutions));
     }
 }

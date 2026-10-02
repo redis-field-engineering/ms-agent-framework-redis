@@ -26,6 +26,9 @@ public static class RedisContextRetrieverTools
             AgentKeyHeaderName = policy.AgentKeyHeaderName,
             AgentKeyScheme = policy.AgentKeyScheme,
             ConnectionTimeout = policy.ConnectionTimeout,
+            DiscoveryTimeout = policy.DiscoveryTimeout,
+            ExecutionTimeout = policy.ExecutionTimeout,
+            MaximumConcurrentToolExecutions = policy.MaximumConcurrentToolExecutions,
         }, credential.AgentKey, cancellationToken).ConfigureAwait(false);
         return new ContextRetrieverToolLease(client);
     }

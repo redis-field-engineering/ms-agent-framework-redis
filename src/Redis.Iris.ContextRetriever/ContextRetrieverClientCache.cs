@@ -8,6 +8,7 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
     private readonly IContextRetrieverClientFactory _factory;
     private readonly ContextRetrieverClientCacheOptions _options;
     private readonly TimeProvider _timeProvider;
+    private readonly CancellationToken _shutdownToken;
     private readonly ConcurrentDictionary<CacheKey, CacheEntry> _entries = new();
     private int _disposed;
 
@@ -15,12 +16,14 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
     public ContextRetrieverClientCache(
         IContextRetrieverClientFactory factory,
         ContextRetrieverClientCacheOptions? options = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        CancellationToken shutdownToken = default)
     {
         _factory = factory ?? throw new ArgumentNullException(nameof(factory));
         _options = options ?? new();
         _options.Validate();
         _timeProvider = timeProvider ?? TimeProvider.System;
+        _shutdownToken = shutdownToken;
     }
 
     /// <summary>Gets or initializes a session isolated by endpoint, access profile, and credential version.</summary>
@@ -40,7 +43,7 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
         var now = _timeProvider.GetUtcNow();
         var candidate = new CacheEntry(
             new Lazy<Task<IContextRetrieverClient>>(
-                () => _factory.ConnectAsync(clientOptions, credential.AgentKey, CancellationToken.None),
+                () => _factory.ConnectAsync(clientOptions, credential.AgentKey, _shutdownToken),
                 LazyThreadSafetyMode.ExecutionAndPublication),
             now);
         var entry = _entries.GetOrAdd(key, candidate);

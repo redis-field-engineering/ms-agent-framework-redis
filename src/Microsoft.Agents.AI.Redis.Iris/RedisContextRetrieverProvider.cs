@@ -12,6 +12,12 @@ public sealed class RedisContextRetrieverOptions
     public string AgentKeyScheme { get; init; } = "Bearer";
     /// <summary>Connect and MCP initialization timeout.</summary>
     public TimeSpan ConnectionTimeout { get; init; } = TimeSpan.FromSeconds(15);
+    /// <summary>Authorized tool discovery timeout.</summary>
+    public TimeSpan DiscoveryTimeout { get; init; } = TimeSpan.FromSeconds(15);
+    /// <summary>Per-tool execution timeout.</summary>
+    public TimeSpan ExecutionTimeout { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>Per-profile concurrent tool execution limit.</summary>
+    public int MaximumConcurrentToolExecutions { get; init; } = 8;
 }
 
 /// <summary>Supplies principal-authorized Redis Context Retriever tools for each invocation.</summary>
@@ -50,6 +56,9 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
             AgentKeyHeaderName = _options.AgentKeyHeaderName,
             AgentKeyScheme = _options.AgentKeyScheme,
             ConnectionTimeout = _options.ConnectionTimeout,
+            DiscoveryTimeout = _options.DiscoveryTimeout,
+            ExecutionTimeout = _options.ExecutionTimeout,
+            MaximumConcurrentToolExecutions = _options.MaximumConcurrentToolExecutions,
         }, cancellationToken).ConfigureAwait(false);
 
         return new AIContext { Tools = client.Tools };

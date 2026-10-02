@@ -27,3 +27,13 @@ public sealed class ContextRetrieverAccessDeniedException : ContextRetrieverExce
     /// <summary>Creates an exception.</summary>
     public ContextRetrieverAccessDeniedException(string message, Exception? innerException = null) : base(message, innerException) { }
 }
+
+/// <summary>Raised when a bounded Context Retriever operation exceeds its configured timeout.</summary>
+public sealed class ContextRetrieverTimeoutException : ContextRetrieverException
+{
+    /// <summary>The bounded operation that timed out.</summary>
+    public string Operation { get; }
+    /// <summary>Creates an exception.</summary>
+    public ContextRetrieverTimeoutException(string operation, Exception? innerException = null)
+        : base($"Context Retriever {operation} timed out.", innerException) => Operation = operation;
+}

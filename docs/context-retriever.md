@@ -17,3 +17,7 @@ Production endpoints must use HTTPS. Plain HTTP is accepted only for loopback de
 ## Metrics and alerts
 
 Subscribe to the `Redis.Iris.ContextRetriever` meter. It emits connection attempts/failures, discovery duration/failures, tool-call duration/failures, active connections, reconnects, and cache hit/miss. Dimensions never include tenant, session, endpoint, arguments, or results; tool name is intentionally omitted to make cardinality safe for dynamic schemas. Useful portable alerts include a sustained connection/discovery failure ratio, p95 discovery or tool latency above the application's timeout budget, and unexpected connection churn or cache misses.
+
+## Operational controls
+
+Configure connection/initialization, discovery, and execution timeouts independently. Each profile has its own tool-execution semaphore; concurrent initialization is deduplicated by the principal cache. Pass the host shutdown token to `ContextRetrieverClientCache` and dispose it asynchronously during shutdown. Failed discovery can create a fresh session on the next invocation, but an interrupted tool call is never automatically retried because its side effects may be ambiguous. `GetHealth()` reports only cache count and shutdown state and never performs a customer-data query.
