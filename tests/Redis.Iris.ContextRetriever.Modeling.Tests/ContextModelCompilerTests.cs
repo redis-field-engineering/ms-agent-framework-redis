@@ -29,6 +29,15 @@ public sealed class ContextModelCompilerTests
         Assert.Throws<ContextModelValidationException>(() => ContextModelCompiler.Compile("bad", "", typeof(BadRelationship), typeof(Customer)));
     }
 
+    [Fact]
+    public void IgnoresDuplicateClrTypesDuringAssemblyStyleDiscovery()
+    {
+        var model = ContextModelCompiler.Compile("Commerce", "", typeof(Customer), typeof(Customer));
+
+        Assert.Equal(1, model.EntityCount);
+        Assert.Equal("Customer", Assert.Single(model.Entities).Name);
+    }
+
     [ContextEntity(KeyTemplate = "customer:{id}", Description = "Customer account")]
     private sealed class Customer
     {

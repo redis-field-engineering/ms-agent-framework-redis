@@ -62,6 +62,17 @@ Both entry points will use the same local MCP client, authentication, connection
 - Epic 3C: Fixed-identity direct attachment
 - Epic 3D: Context Retriever security and observability
 
+### Milestone 3.5: .NET Context Retriever model authoring
+
+- [x] Annotated application POCOs compile without instantiation into the official Context Retriever DataModel shape.
+- [x] Explicit fluent configuration supports clean domain assemblies and overrides annotated metadata.
+- [x] Entity, field, key-template, index, vector, categorical, and relationship validation fails before deployment.
+- [x] JSON output is deterministic, contains no credentials, and is accepted through `ctxctl surface create --datamodel`.
+- [x] Additive and destructive model changes can be classified for CI review.
+- [x] The privileged deployment wrapper checks CLI compatibility and uses ctxctl's stored admin authentication.
+- [x] Optional typed application reads use only tools discovered for the active agent-key scope.
+- [x] Documentation and a runnable travel-domain sample cover generation and deployment.
+
 ### Milestone 4: Python parity and upstream readiness
 
 - Epic 4A: Python Agent Memory adapters

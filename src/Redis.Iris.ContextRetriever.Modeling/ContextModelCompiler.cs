@@ -15,11 +15,12 @@ public static partial class ContextModelCompiler
         ArgumentNullException.ThrowIfNull(entityTypes);
         if (entityTypes.Length == 0) throw new ContextModelValidationException("At least one entity type is required.");
 
+        entityTypes = entityTypes.Distinct().ToArray();
         var names = entityTypes.ToDictionary(type => type, GetEntityName);
         if (names.Values.Distinct(StringComparer.Ordinal).Count() != names.Count)
             throw new ContextModelValidationException("Entity names must be unique.");
 
-        var entities = entityTypes.Distinct().Select(type => CompileEntity(type, names))
+        var entities = entityTypes.Select(type => CompileEntity(type, names))
             .OrderBy(entity => entity.Name, StringComparer.Ordinal).ToArray();
         return new(title, description ?? "", entities);
     }

@@ -55,6 +55,11 @@ public sealed class ContextModelBuilder(string title, string description = "")
                 var annotated = ContextModelCompiler.CompileEntity(typeof(TEntity));
                 foreach (var field in annotated.Fields) _fields[field.Name] = field;
                 foreach (var relationship in annotated.Relationships) _relationships[relationship.Name] = relationship;
+                foreach (var property in typeof(TEntity).GetProperties(BindingFlags.Instance | BindingFlags.Public))
+                {
+                    if (property.GetCustomAttribute<ContextRelationshipAttribute>() is { } attribute)
+                        _relationshipTargets[ContextModelCompiler.ExternalName(property, attribute.Name)] = attribute.TargetType;
+                }
             }
         }
 
