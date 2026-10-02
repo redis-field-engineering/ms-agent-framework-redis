@@ -1,0 +1,12 @@
+.git
+.github
+.idea
+.env
+.env.*
+**/bin
+**/obj
+**/TestResults
+artifacts
+*.user
+*.suo
+*.DotSettings.user

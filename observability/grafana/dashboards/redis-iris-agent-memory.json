@@ -1,0 +1,61 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by (redis_iris_operation) (rate(redis_iris_requests_total[$__rate_interval]))", "legendFormat": "{{redis_iris_operation}}", "refId": "A" }
+      ],
+      "title": "Agent Memory request rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum by (redis_iris_operation) (rate(redis_iris_errors_total[$__rate_interval]))", "legendFormat": "{{redis_iris_operation}}", "refId": "A" }
+      ],
+      "title": "Agent Memory error rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le, redis_iris_operation) (rate(redis_iris_operation_duration_milliseconds_bucket[$__rate_interval])))", "legendFormat": "p95 {{redis_iris_operation}}", "refId": "A" }
+      ],
+      "title": "Agent Memory p95 duration",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "table", "placement": "bottom" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(redis_iris_recall_results_bucket[$__rate_interval])))", "legendFormat": "p95 results", "refId": "A" }
+      ],
+      "title": "Recall result count",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 41,
+  "tags": ["redis", "iris", "agent-memory"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "title": "Redis Iris Agent Memory",
+  "uid": "redis-iris-agent-memory",
+  "version": 1
+}

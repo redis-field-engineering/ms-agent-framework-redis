@@ -18,3 +18,9 @@ Metrics:
 All metric attributes are bounded enums. Do not add endpoint, tenant, owner, session, actor, memory, query, or message content as metric dimensions.
 
 `RedisIrisMemoryProvider` emits one structured application log containing the number of records returned by each recall search. Query text, identity values, memory IDs, source session IDs, and memory text are not logged or added to traces or metrics.
+
+## Docker demonstration
+
+`docker compose up --build` runs the DevUI, an OpenTelemetry Collector, Jaeger, Prometheus, and Grafana. The DevUI registers only the connector's `Redis.Iris.AgentMemory` activity source and meter, then exports both signals to the Collector using OTLP/gRPC.
+
+The Collector routes traces to Jaeger and exposes translated Prometheus series on port `8889`; Prometheus scrapes that endpoint and backs the provisioned Grafana dashboard. Application logs are not exported. This intentionally avoids capturing prompt text, memory content, user/session identifiers, or HTTP paths through broad automatic instrumentation.

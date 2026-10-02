@@ -8,6 +8,9 @@ using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Redis.Iris;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Redis.Iris.AgentMemory;
 using RedisIrisDevUI;
 
@@ -23,6 +26,23 @@ var ownerId = builder.Configuration["SAMPLE_OWNER_ID"] ?? "redis-iris-devui-shop
 var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 var identityResolver = new RamIdentityResolver(ownerId);
+var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
+
+if (!string.IsNullOrWhiteSpace(otlpEndpoint))
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(resource => resource.AddService(
+            serviceName: builder.Configuration["OTEL_SERVICE_NAME"] ?? "redis-iris-devui"))
+        .WithTracing(tracing => tracing
+            // ASP.NET Core creates an ambient request Activity even when HTTP instrumentation is not exported.
+            // Sample the explicitly registered connector source instead of inheriting that unsampled parent.
+            .SetSampler(new AlwaysOnSampler())
+            .AddSource(AgentMemoryDiagnostics.ActivitySourceName)
+            .AddOtlpExporter())
+        .WithMetrics(metrics => metrics
+            .AddMeter(AgentMemoryDiagnostics.MeterName)
+            .AddOtlpExporter());
+}
 
 builder.Services.AddSingleton(identityResolver);
 builder.Services.AddChatClient(new OpenAIClient(openAiApiKey).GetChatClient(model).AsIChatClient());
@@ -57,7 +77,12 @@ builder.AddAIAgent(AgentName, (services, name) =>
 
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
-builder.AddDevUI();
+builder.AddDevUI(options =>
+{
+    // Docker port forwarding appears as a non-loopback caller inside the container.
+    // The Compose file binds the published port to host loopback only.
+    options.AllowRemoteAccess = ParseBoolean(builder.Configuration, "DEVUI_ALLOW_REMOTE_ACCESS", false);
+});
 
 using var telemetry = ParseBoolean(builder.Configuration, "REDIS_IRIS_DEMO_TELEMETRY", false)
     ? StartConsoleTelemetry()
@@ -194,6 +219,7 @@ static string Dashboard(string ownerId, int shortTermWindow) => $$"""
         <dt><strong>Short-term window</strong></dt><dd>{{shortTermWindow}} recent messages</dd>
       </dl>
       <p><a href="/devui">Open the Agent Framework DevUI</a></p>
+      <p>When running with Docker Compose: <a href="http://localhost:16686" target="_blank">Jaeger traces</a> · <a href="http://localhost:3000/d/redis-iris-agent-memory" target="_blank">Grafana metrics</a> · <a href="http://localhost:9090" target="_blank">Prometheus</a></p>
       <h2>Demonstration</h2>
       <ol>
         <li>Tell the agent your name and travel preferences.</li>

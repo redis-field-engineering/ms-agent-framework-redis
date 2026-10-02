@@ -7,6 +7,8 @@
     <PackageReference Include="Microsoft.Agents.AI.Hosting" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <ProjectReference Include="../../src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
   </ItemGroup>
 </Project>

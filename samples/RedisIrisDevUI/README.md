@@ -12,6 +12,28 @@ Add `OPENAI_API_KEY` to the repository root `.env.local`, then run:
 
 Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or [http://localhost:5080/devui](http://localhost:5080/devui) for the Agent Framework DevUI.
 
+## Run the Docker observability demo
+
+The repository-level Compose stack builds the DevUI and exports connector metrics and traces over OTLP to a local OpenTelemetry Collector:
+
+```bash
+docker compose up --build
+```
+
+The stack reads Redis Cloud and OpenAI credentials from the ignored `.env.local` file. It does not bake that file into the application image.
+Docker bridge traffic requires DevUI's remote-access option, so Compose enables it while binding every published port to `127.0.0.1`. The non-container runner retains DevUI's loopback-only default.
+
+| Surface | URL | Purpose |
+| --- | --- | --- |
+| DevUI | <http://localhost:5080/devui> | Exercise short- and long-term memory |
+| Grafana | <http://localhost:3000/d/redis-iris-agent-memory> | View the provisioned Agent Memory metrics dashboard |
+| Jaeger | <http://localhost:16686> | Inspect `redis-iris-devui` traces |
+| Prometheus | <http://localhost:9090> | Query the raw exported metric series |
+
+Generate some traffic in DevUI, allow one metrics export interval, then select the `redis-iris-devui` service in Jaeger. Grafana is configured for anonymous local viewing. Stop the stack with `docker compose down`; add `--volumes` only when you also want to discard the local Prometheus and Grafana data.
+
+Jaeger stores and visualizes traces. Metrics travel over the same OTLP connection but are exposed by the Collector for Prometheus and visualized in Grafana.
+
 The runner loads the existing Redis Cloud and OpenAI settings from `.env.local`. Optional settings are:
 
 ```dotenv
