@@ -1,4 +1,5 @@
 using System.Net;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -88,6 +89,38 @@ public sealed class ContextRetrieverClientContractTests
 
         Assert.Equal(1, handler.RequestCount);
         Assert.DoesNotContain("redirect-secret", error.ToString());
+    }
+
+    [Fact]
+    public async Task TracesConnectInitializeDiscoveryAndExecutionWithoutSensitiveData()
+    {
+        var activities = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ContextRetrieverDiagnostics.ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => activities.Add(activity),
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var parentSource = new ActivitySource("test-parent");
+        using var parentListener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "test-parent",
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+        };
+        ActivitySource.AddActivityListener(parentListener);
+        using var parent = parentSource.StartActivity("agent-invocation")!;
+
+        var factory = new ContextRetrieverClientFactory(handlerFactory: () => new McpContractHandler(), loggerFactory: null);
+        await using var client = await factory.ConnectAsync(s_options, "trace-secret");
+        await Assert.Single(client.Tools).InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "private-name" }));
+
+        Assert.Equal(["redis.iris.context_retriever.initialize", "redis.iris.context_retriever.discover", "redis.iris.context_retriever.connect", "redis.iris.context_retriever.execute"], activities.Select(a => a.OperationName));
+        Assert.All(activities, activity => Assert.Equal(parent.TraceId, activity.TraceId));
+        var serialized = string.Join('|', activities.SelectMany(a => a.TagObjects).Select(tag => $"{tag.Key}={tag.Value}"));
+        Assert.DoesNotContain("trace-secret", serialized);
+        Assert.DoesNotContain("private-name", serialized);
+        Assert.DoesNotContain("context.example.test", serialized);
     }
 
     private sealed class McpContractHandler : HttpMessageHandler

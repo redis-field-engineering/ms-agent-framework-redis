@@ -27,6 +27,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         string agentKey,
         CancellationToken cancellationToken = default)
     {
+        using var connectActivity = ContextRetrieverDiagnostics.Start("connect");
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(agentKey);
@@ -53,28 +54,40 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         try
         {
             var transport = CreateTransport(transportOptions);
-            client = await McpClient.CreateAsync(
-                transport,
-                new McpClientOptions
+            using (var initializeActivity = ContextRetrieverDiagnostics.Start("initialize"))
+            {
+                try
                 {
-                    ProtocolVersion = "2025-11-25",
-                    InitializationTimeout = options.ConnectionTimeout,
-                },
-                _loggerFactory,
-                cancellationToken)
-                .ConfigureAwait(false);
+                    client = await McpClient.CreateAsync(
+                        transport,
+                        new McpClientOptions { ProtocolVersion = "2025-11-25", InitializationTimeout = options.ConnectionTimeout },
+                        _loggerFactory,
+                        cancellationToken).ConfigureAwait(false);
+                    initializeActivity?.SetTag("redis.iris.authorization.outcome", "success");
+                }
+                catch (Exception ex)
+                {
+                    initializeActivity?.SetTag("redis.iris.authorization.outcome", "failure");
+                    ContextRetrieverDiagnostics.Failed(initializeActivity, ex);
+                    throw;
+                }
+            }
 
             IList<McpClientTool> tools;
-            try
+            using (var discoveryActivity = ContextRetrieverDiagnostics.Start("discover"))
             {
-                tools = await client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                throw new ContextRetrieverDiscoveryException("Context Retriever tool discovery failed.", ex);
+                try
+                {
+                    tools = await client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    ContextRetrieverDiagnostics.Failed(discoveryActivity, ex);
+                    throw new ContextRetrieverDiscoveryException("Context Retriever tool discovery failed.", ex);
+                }
             }
 
-            return new ContextRetrieverClient(client, tools.Cast<AIFunction>().ToArray());
+            return new ContextRetrieverClient(client, tools.Select(static tool => (AIFunction)new TracingAIFunction(tool)).ToArray());
         }
         catch (ContextRetrieverException)
         {
@@ -83,6 +96,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            ContextRetrieverDiagnostics.Failed(connectActivity, ex);
             if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
             throw new ContextRetrieverConnectionException("Context Retriever MCP connection failed.", ex);
         }
