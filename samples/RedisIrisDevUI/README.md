@@ -21,9 +21,9 @@ The sample defines ordinary application POCOs for `Traveler`, `FlightReservation
 | Surface | Purpose |
 | --- | --- |
 | `/api/context/model` | Inspect or download the generated Context Retriever DataModel |
-| `/api/context/examples` | Inspect representative POCO records and their foreign-key relationships |
+| `/api/context/examples` | Inspect import-ready synthetic POCO records and their foreign-key relationships |
 
-This is deliberately a preview boundary: starting the DevUI neither creates a managed Context Retriever surface nor inserts the example records. Surface deployment remains an administrative operation, and application data should be written through its normal system-of-record path.
+Starting the DevUI does not perform administrative or data-loading operations. Surface deployment and demo-data seeding are explicit one-shot jobs.
 
 The model can also be generated without Redis or OpenAI credentials:
 
@@ -36,7 +36,7 @@ dotnet run --project samples/RedisIrisDevUI -- --print-context-model
 The optional one-shot Compose provisioner generates this model inside Docker, checks for a surface with the configured stable name, and creates it only when absent. Add these values to the ignored `.env.local` file:
 
 ```dotenv
-CONTEXT_RETRIEVER_ADMIN_URL="https://your-context-retriever-control-plane"
+CONTEXT_RETRIEVER_ADMIN_URL="https://cloud.redis.io/context-surfaces"
 CONTEXT_RETRIEVER_ADMIN_KEY="cs_admin_..."
 CONTEXT_RETRIEVER_REDIS_ADDRESS="your-redis-host:port"
 CONTEXT_RETRIEVER_REDIS_USERNAME="default"
@@ -53,7 +53,19 @@ docker compose --profile context-retriever run --rm --build context-provisioner
 
 The generated artifact is written to `artifacts/context-retriever/redis-iris-travel-context-model.json`. If exactly one surface with that name exists, the command exits successfully without changing it. To deliberately apply a newer generated model to that surface, set `CONTEXT_RETRIEVER_UPDATE_EXISTING=true`; duplicate names fail safely instead of selecting an arbitrary surface.
 
-The administrative URL/key above are control-plane credentials. The DevUI's runtime Context Retriever provider separately needs a least-privilege MCP endpoint and agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
+The administrative URL/key above are control-plane credentials. Do not use the regional runtime URL ending in `/mcp` as `CONTEXT_RETRIEVER_ADMIN_URL`. The DevUI's runtime Context Retriever provider separately needs that MCP endpoint and a least-privilege agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
+
+## Seed the synthetic travel context
+
+After the surface exists, run the one-shot seeder with the same admin URL, admin key, and stable surface name:
+
+```bash
+docker compose --profile context-retriever run --rm --build context-seeder
+```
+
+The seeder generates `artifacts/context-retriever/redis-iris-travel-context-seed.json` from the sample's POCO instances, resolves exactly one surface by name, and imports `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt` separately. Stable record IDs and `on_conflict=overwrite` make repeated runs safe. A missing surface, duplicate surface names, validation error, or partial import causes the job to fail.
+
+The records are synthetic demonstration data. Production applications should ingest authoritative records through an appropriately authenticated system-of-record workflow rather than ship the admin key with the application.
 
 Add the surface's runtime credentials to `.env.local` before starting DevUI:
 
@@ -104,7 +116,7 @@ REDIS_IRIS_DEMO_TELEMETRY="false"
 3. Open `/api/ram` to see the trusted owner, generated RAM session IDs, and promoted long-term memories.
 4. Open `/api/ram/sessions/{sessionId}` to inspect a session's events and managed summary.
 5. After RAM's asynchronous promotion runs, create a new DevUI conversation and ask what the agent remembers.
-6. Ask for a seeded flight, hotel, or receipt and inspect `/api/context/status` plus the Context Retriever spans in Jaeger.
+6. After running `context-seeder`, ask for flight `IRIS42`, hotel reservation `HTL-6379`, or Avery Morgan's receipts and inspect `/api/context/status` plus the Context Retriever spans in Jaeger.
 
 The application also prints `RAM USER` and `RAM SESSION` when it assigns a new Agent Framework session to RAM.
 

@@ -2,6 +2,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting;
@@ -17,10 +18,21 @@ using Redis.Iris.ContextRetriever.Modeling;
 using RedisIrisDevUI;
 
 const string AgentName = "redis-iris-travel-assistant";
+var contextJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+{
+    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    WriteIndented = true,
+};
 
 if (args.Contains("--print-context-model", StringComparer.Ordinal))
 {
     Console.Write(ContextDataModelJson.Serialize(TravelContext.Model));
+    return;
+}
+
+if (args.Contains("--print-context-seed", StringComparer.Ordinal))
+{
+    Console.Write(JsonSerializer.Serialize(TravelContext.Examples, contextJsonOptions));
     return;
 }
 
@@ -157,7 +169,7 @@ app.MapGet("/api/ram", async (IRedisAgentMemoryClient client, CancellationToken 
 app.MapGet("/api/context/model", (ContextDataModel contextModel) =>
     Results.Text(ContextDataModelJson.Serialize(contextModel), "application/json"));
 
-app.MapGet("/api/context/examples", () => Results.Ok(TravelContext.Examples));
+app.MapGet("/api/context/examples", () => Results.Json(TravelContext.Examples, contextJsonOptions));
 
 app.MapGet("/api/context/status", (ContextRetrieverClientCache cache) =>
 {

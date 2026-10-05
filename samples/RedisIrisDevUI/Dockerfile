@@ -18,6 +18,12 @@ COPY scripts/provision-context-retriever.sh /usr/local/bin/provision-context-ret
 RUN chmod 0755 /usr/local/bin/provision-context-retriever
 ENTRYPOINT ["/usr/local/bin/provision-context-retriever"]
 
+FROM context-provisioner AS context-seeder
+COPY scripts/seed-context-retriever.py /usr/local/lib/seed-context-retriever.py
+COPY scripts/seed-context-retriever.sh /usr/local/bin/seed-context-retriever
+RUN chmod 0755 /usr/local/bin/seed-context-retriever /usr/local/lib/seed-context-retriever.py
+ENTRYPOINT ["/usr/local/bin/seed-context-retriever"]
+
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
