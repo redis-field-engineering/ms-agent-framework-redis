@@ -14,7 +14,14 @@ set -a
 source "${env_file}"
 set +a
 
-required=(REDIS_IRIS_ENDPOINT REDIS_IRIS_STORE_ID REDIS_IRIS_API_KEY OPENAI_API_KEY)
+required=(
+  REDIS_IRIS_ENDPOINT
+  REDIS_IRIS_STORE_ID
+  REDIS_IRIS_API_KEY
+  OPENAI_API_KEY
+  REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT
+  REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY
+)
 for name in "${required[@]}"; do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing required value ${name} in ${env_file}." >&2

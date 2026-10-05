@@ -55,6 +55,16 @@ The generated artifact is written to `artifacts/context-retriever/redis-iris-tra
 
 The administrative URL/key above are control-plane credentials. The DevUI's runtime Context Retriever provider separately needs a least-privilege MCP endpoint and agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
 
+Add the surface's runtime credentials to `.env.local` before starting DevUI:
+
+```dotenv
+REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT="https://your-context-retriever-mcp-endpoint/mcp"
+REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY="cs_agent_..."
+REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="environment-v1"
+```
+
+The agent key must belong to the provisioned travel surface and should carry only the access tags needed by this sample. The optional non-secret credential version lets a rotated key establish a fresh cached MCP session. The admin key is not passed to the DevUI connector.
+
 ## Run the Docker observability demo
 
 The repository-level Compose stack builds the DevUI and exports connector metrics and traces over OTLP to a local OpenTelemetry Collector:
@@ -69,6 +79,7 @@ Docker bridge traffic requires DevUI's remote-access option, so Compose enables 
 | Surface | URL | Purpose |
 | --- | --- | --- |
 | DevUI | <http://localhost:5080/devui> | Exercise short- and long-term memory |
+| Context status | <http://localhost:5080/api/context/status> | Confirm lazy MCP initialization and an active authorized session |
 | Grafana | <http://localhost:3000/d/redis-iris-agent-memory> | View the provisioned Agent Memory metrics dashboard |
 | Jaeger | <http://localhost:16686> | Inspect `redis-iris-devui` traces |
 | Prometheus | <http://localhost:9090> | Query the raw exported metric series |
@@ -93,6 +104,7 @@ REDIS_IRIS_DEMO_TELEMETRY="false"
 3. Open `/api/ram` to see the trusted owner, generated RAM session IDs, and promoted long-term memories.
 4. Open `/api/ram/sessions/{sessionId}` to inspect a session's events and managed summary.
 5. After RAM's asynchronous promotion runs, create a new DevUI conversation and ask what the agent remembers.
+6. Ask for a seeded flight, hotel, or receipt and inspect `/api/context/status` plus the Context Retriever spans in Jaeger.
 
 The application also prints `RAM USER` and `RAM SESSION` when it assigns a new Agent Framework session to RAM.
 
