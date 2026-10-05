@@ -27,7 +27,8 @@ public sealed class ContextRetrieverClientContractTests
         Assert.Equal("find_customer", tool.Name);
         var result = await tool.InvokeAsync(new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "Ada" }), CancellationToken.None);
         Assert.Contains("Ada", result?.ToString());
-        Assert.All(handler.AuthorizationHeaders, value => Assert.Equal("Bearer secret-agent-key", value));
+        Assert.All(handler.AgentKeyHeaders, value => Assert.Equal("secret-agent-key", value));
+        Assert.All(handler.AuthorizationHeaders, Assert.Null);
         Assert.Equal(["initialize", "notifications/initialized", "tools/list", "tools/call"], handler.Methods);
     }
 
@@ -209,6 +210,7 @@ public sealed class ContextRetrieverClientContractTests
         public int MaximumActiveToolCalls { get; private set; }
         private int _activeToolCalls;
         public List<string> Methods { get; } = [];
+        public List<string?> AgentKeyHeaders { get; } = [];
         public List<string?> AuthorizationHeaders { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -220,6 +222,7 @@ public sealed class ContextRetrieverClientContractTests
             var root = document.RootElement;
             var method = root.GetProperty("method").GetString()!;
             Methods.Add(method);
+            AgentKeyHeaders.Add(request.Headers.TryGetValues("X-API-Key", out var values) ? values.Single() : null);
             AuthorizationHeaders.Add(request.Headers.Authorization?.ToString());
 
             if (method == "notifications/initialized") return new(HttpStatusCode.Accepted);

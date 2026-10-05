@@ -7,9 +7,9 @@ namespace Microsoft.Agents.AI.Redis.Iris;
 public sealed class RedisContextRetrieverOptions
 {
     /// <summary>Agent-key header name documented by the deployed endpoint.</summary>
-    public string AgentKeyHeaderName { get; init; } = "Authorization";
+    public string AgentKeyHeaderName { get; init; } = "X-API-Key";
     /// <summary>Agent-key header scheme; use an empty value for an unprefixed header.</summary>
-    public string AgentKeyScheme { get; init; } = "Bearer";
+    public string AgentKeyScheme { get; init; } = "";
     /// <summary>Connect and MCP initialization timeout.</summary>
     public TimeSpan ConnectionTimeout { get; init; } = TimeSpan.FromSeconds(15);
     /// <summary>Authorized tool discovery timeout.</summary>

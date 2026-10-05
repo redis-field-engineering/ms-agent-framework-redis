@@ -7,10 +7,10 @@ public sealed class ContextRetrieverClientOptions
     public required Uri Endpoint { get; init; }
 
     /// <summary>The HTTP header used to carry the agent key.</summary>
-    public string AgentKeyHeaderName { get; init; } = "Authorization";
+    public string AgentKeyHeaderName { get; init; } = "X-API-Key";
 
-    /// <summary>The value prefix used for the agent key header.</summary>
-    public string AgentKeyScheme { get; init; } = "Bearer";
+    /// <summary>The optional value prefix used for the agent key header. Context Retriever agent keys are unprefixed by default.</summary>
+    public string AgentKeyScheme { get; init; } = "";
 
     /// <summary>Maximum time allowed to connect and initialize MCP.</summary>
     public TimeSpan ConnectionTimeout { get; init; } = TimeSpan.FromSeconds(15);
