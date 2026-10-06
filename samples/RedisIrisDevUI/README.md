@@ -2,7 +2,7 @@
 
 This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat, owner-scoped RAM inspection and cleanup endpoints, and an annotated structured-context model for a travel agency.
 
-The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. The store is intentionally unscoped and process-local because this is a single-user development sample; production hosting must use authenticated caller isolation and durable session storage.
+The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. It supports an optional multi-user demonstration mode that partitions sessions, RAM, and Context Retriever credentials by a trusted composite tenant/traveler identity. The store remains process-local; production hosting should use its normal identity provider and durable session storage.
 
 ## Run
 
@@ -16,7 +16,7 @@ Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or 
 
 ## Inspect the structured travel model
 
-The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`. Every entity carries indexed `tenant_id` and `traveler_id` authorization tags, and every Redis key includes the same composite boundary.
+The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`. Every entity carries indexed `tenant_id` and `traveler_id` authorization tags; stable entity IDs remain the storage-key components.
 
 | Surface | Purpose |
 | --- | --- |
@@ -78,6 +78,33 @@ REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="environment-v1"
 ```
 
 The agent key must belong to the provisioned travel surface and should carry only the access tags needed by this sample. The optional non-secret credential version lets a rotated key establish a fresh cached MCP session. The admin key is not passed to the DevUI connector.
+
+## Demonstrate multi-user isolation
+
+Create a separate Context Retriever agent key for each traveler. Each key must be restricted by both indexed access tags:
+
+```bash
+ctxctl agent create --surface-id <surface-id> --name "Avery demo" \
+  --access-tags '{"tenant_id":["redis-travel-demo"],"traveler_id":["traveler-001"]}'
+
+ctxctl agent create --surface-id <surface-id> --name "Riley demo" \
+  --access-tags '{"tenant_id":["redis-travel-demo"],"traveler_id":["traveler-002"]}'
+```
+
+Then add a one-line JSON array to `.env.local`. Use independently generated high-entropy values for `signInToken`; these local tokens are development credentials and must not be committed:
+
+```dotenv
+DEVUI_USERS_JSON='[{"subject":"avery-demo","displayName":"Avery Morgan","tenantId":"redis-travel-demo","travelerId":"traveler-001","signInToken":"<random-local-token-1>","contextRetrieverAgentKey":"<avery-scoped-agent-key>","contextRetrieverCredentialVersion":"avery-v1"},{"subject":"riley-demo","displayName":"Riley Chen","tenantId":"redis-travel-demo","travelerId":"traveler-002","signInToken":"<random-local-token-2>","contextRetrieverAgentKey":"<riley-scoped-agent-key>","contextRetrieverCredentialVersion":"riley-v1"}]'
+```
+
+When this setting contains at least two users, the sample enables cookie authentication and Agent Framework session isolation. Open `/login`, enter one user’s local token, and then use DevUI normally. The authenticated server-side mapping supplies all of the following; none are accepted from model tool arguments:
+
+- Agent Framework isolation key: `tenant_id:traveler_id`
+- RAM tenant and actor identity, with the owner scoped as `tenant_id:traveler_id`
+- Context Retriever access-profile ID and scoped agent key
+- Filtering for the `/api/context/examples` inspection endpoint
+
+Sign out before testing the second traveler. The two configured Context Retriever keys must be distinct; using a shared key would defeat server-side traveler isolation. In production, replace this local token directory with OIDC/JWT or another ASP.NET Core authentication scheme while retaining the same claim-to-scope mapping.
 
 ## Run the Docker observability demo
 

@@ -17,10 +17,9 @@ internal static class TravelContext
         typeof(HotelReservation),
         typeof(TravelReceipt));
 
-    internal static object Examples { get; } = new
-    {
-        travelers = new[]
-        {
+    internal static TravelContextSeed Examples { get; } = new(
+        Travelers:
+        [
             new Traveler
             {
                 TenantId = DemoTenantId,
@@ -39,9 +38,9 @@ internal static class TravelContext
                 LoyaltyTier = "silver",
                 HomeAirport = "SEA",
             },
-        },
-        flights = new[]
-        {
+        ],
+        Flights:
+        [
             new FlightReservation
             {
                 TenantId = DemoTenantId,
@@ -72,9 +71,9 @@ internal static class TravelContext
                 ArrivalTime = new DateTimeOffset(2027, 3, 14, 20, 35, 0, TimeSpan.Zero),
                 CabinClass = "economy",
             },
-        },
-        hotels = new[]
-        {
+        ],
+        Hotels:
+        [
             new HotelReservation
             {
                 TenantId = DemoTenantId,
@@ -101,9 +100,9 @@ internal static class TravelContext
                 CheckOut = new DateTimeOffset(2027, 3, 17, 11, 0, 0, TimeSpan.FromHours(-4)),
                 RoomType = "queen",
             },
-        },
-        receipts = new[]
-        {
+        ],
+        Receipts:
+        [
             new TravelReceipt
             {
                 TenantId = DemoTenantId,
@@ -143,20 +142,31 @@ internal static class TravelContext
                 Currency = "USD",
                 PurchasedAt = new DateTimeOffset(2026, 10, 4, 17, 5, 0, TimeSpan.Zero),
             },
-        },
-    };
+        ]);
+
+    internal static TravelContextSeed ExamplesFor(TravelUser user) => new(
+        Examples.Travelers.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray(),
+        Examples.Flights.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray(),
+        Examples.Hotels.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray(),
+        Examples.Receipts.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray());
 }
 
-[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}", Description = "A travel agency customer")]
+internal sealed record TravelContextSeed(
+    IReadOnlyList<Traveler> Travelers,
+    IReadOnlyList<FlightReservation> Flights,
+    IReadOnlyList<HotelReservation> Hotels,
+    IReadOnlyList<TravelReceipt> Receipts);
+
+[ContextEntity(KeyTemplate = "traveler:{id}", Description = "A travel agency customer")]
 internal sealed class Traveler
 {
-    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
-    [ContextField(Name = "id", Index = ContextIndex.Tag, Description = "Stable traveler ID")]
+    [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable traveler ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler authorization boundary")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler authorization boundary")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "full_name", Index = ContextIndex.Text, Description = "Traveler's full name")]
@@ -169,16 +179,16 @@ internal sealed class Traveler
     public required string HomeAirport { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:flight-reservation:{id}", Description = "A booked airline itinerary")]
+[ContextEntity(KeyTemplate = "flight-reservation:{id}", Description = "A booked airline itinerary")]
 internal sealed class FlightReservation
 {
-    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable flight reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Airline confirmation code")]
@@ -213,16 +223,16 @@ internal sealed class FlightReservation
     public Traveler? Traveler { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:hotel-reservation:{id}", Description = "A booked hotel stay")]
+[ContextEntity(KeyTemplate = "hotel-reservation:{id}", Description = "A booked hotel stay")]
 internal sealed class HotelReservation
 {
-    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable hotel reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Hotel confirmation code")]
@@ -251,16 +261,16 @@ internal sealed class HotelReservation
     public Traveler? Traveler { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:travel-receipt:{id}", Description = "A receipt for a travel purchase")]
+[ContextEntity(KeyTemplate = "travel-receipt:{id}", Description = "A receipt for a travel purchase")]
 internal sealed class TravelReceipt
 {
-    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable receipt ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler associated with the purchase")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler associated with the purchase")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "flight_reservation_id", Index = ContextIndex.Tag, Description = "Related flight reservation, when applicable")]

@@ -7,6 +7,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.DevUI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Redis.Iris;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using OpenTelemetry.Metrics;
@@ -43,14 +45,27 @@ var storeId = Required(builder.Configuration, "REDIS_IRIS_STORE_ID");
 var irisApiKey = Required(builder.Configuration, "REDIS_IRIS_API_KEY");
 var openAiApiKey = Required(builder.Configuration, "OPENAI_API_KEY");
 var contextRetrieverEndpoint = Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT");
-var contextRetrieverAgentKey = Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY");
 var contextRetrieverCredentialVersion = builder.Configuration["REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION"] ?? "environment-v1";
 var ownerId = builder.Configuration["SAMPLE_OWNER_ID"] ?? "redis-iris-devui-shopper";
 var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
-var identityResolver = new RamIdentityResolver(ownerId);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 var travelContextModel = TravelContext.Model;
+var userDirectory = TravelUserDirectory.Parse(builder.Configuration["DEVUI_USERS_JSON"]);
+var contextRetrieverAgentKey = userDirectory.IsMultiUser
+    ? null
+    : Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY");
+var legacyUser = new TravelUser(
+    Subject: ownerId,
+    DisplayName: ownerId,
+    TenantId: "redis-iris-devui",
+    TravelerId: ownerId,
+    SignInToken: "legacy-single-user-mode",
+    ContextRetrieverAgentKey: contextRetrieverAgentKey ?? "unused-in-multi-user-mode",
+    ContextRetrieverCredentialVersion: contextRetrieverCredentialVersion);
+var httpContextAccessor = new HttpContextAccessor();
+var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser);
+var identityResolver = new RamIdentityResolver(userAccessor);
 
 if (!string.IsNullOrWhiteSpace(otlpEndpoint))
 {
@@ -70,18 +85,23 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
             .AddOtlpExporter());
 }
 
+builder.Services.AddSingleton(userDirectory);
+builder.Services.AddSingleton<IHttpContextAccessor>(httpContextAccessor);
+builder.Services.AddSingleton(userAccessor);
+builder.Services.AddSingleton<AgentIsolationKeyProvider, TravelAgentIsolationKeyProvider>();
 builder.Services.AddSingleton(identityResolver);
 builder.Services.AddSingleton(travelContextModel);
-var contextRetrieverProfile = new ContextRetrieverAccessProfile(
-    new Uri(contextRetrieverEndpoint),
-    "redis-iris-devui-travel-surface",
-    new FixedContextRetrieverCredentialProvider(
-        new(contextRetrieverAgentKey, contextRetrieverCredentialVersion)));
 builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
     new DelegateContextRetrieverAccessResolver((_, cancellationToken) =>
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(contextRetrieverProfile);
+        var user = userAccessor.Current;
+        return ValueTask.FromResult(new ContextRetrieverAccessProfile(
+            new Uri(contextRetrieverEndpoint),
+            $"travel:{user.IsolationKey}",
+            new FixedContextRetrieverCredentialProvider(new(
+                user.ContextRetrieverAgentKey,
+                user.ContextRetrieverCredentialVersion))));
     }));
 builder.Services.AddSingleton<IContextRetrieverClientFactory>(services =>
     new ContextRetrieverClientFactory(services.GetRequiredService<ILoggerFactory>()));
@@ -99,7 +119,10 @@ builder.Services.AddRedisIrisAgentMemory(options =>
     options.Credential = irisApiKey;
     options.IdentityResolver = identityResolver.Resolve;
     options.AuthorizationPolicy = identity =>
-        identity.TenantId == "redis-iris-devui" && identity.OwnerId == ownerId;
+    {
+        var user = userAccessor.Current;
+        return identity.TenantId == user.TenantId && identity.OwnerId == user.IsolationKey;
+    };
     options.ChatHistory.MaxMessagesToRetrieve = shortTermWindow;
     options.Memory.Search = new() { Limit = 5, SimilarityThreshold = 0.25 };
     options.RecallFailurePolicy = RedisIrisFailurePolicy.FailClosed;
@@ -125,15 +148,33 @@ builder.AddAIAgent(AgentName, (services, name) =>
             services.GetRequiredService<RedisContextRetrieverProvider>(),
         ],
     }))
-    .WithInMemorySessionStore(withIsolation: false);
+    .WithInMemorySessionStore(withIsolation: userDirectory.IsMultiUser);
 
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
+if (userDirectory.IsMultiUser)
+{
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.Cookie.Name = "redis-iris-devui-user";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Strict;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+            options.LoginPath = "/login";
+            options.AccessDeniedPath = "/login";
+        });
+    builder.Services.AddAuthorization();
+}
 builder.AddDevUI(options =>
 {
     // Docker port forwarding appears as a non-loopback caller inside the container.
     // The Compose file binds the published port to host loopback only.
     options.AllowRemoteAccess = ParseBoolean(builder.Configuration, "DEVUI_ALLOW_REMOTE_ACCESS", false);
+    if (userDirectory.IsMultiUser)
+    {
+        options.ConfigureEndpoints = endpoints => endpoints.RequireAuthorization();
+    }
 });
 
 using var telemetry = ParseBoolean(builder.Configuration, "REDIS_IRIS_DEMO_TELEMETRY", false)
@@ -146,19 +187,52 @@ if (!app.Environment.IsDevelopment())
     throw new InvalidOperationException("RedisIrisDevUI is a local development sample and only runs in the Development environment.");
 }
 
-app.MapOpenAIResponses();
-app.MapOpenAIConversations();
+if (userDirectory.IsMultiUser)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+    app.MapGet("/login", () => Results.Content(LoginPage(), "text/html"));
+    app.MapPost("/login", async (HttpContext httpContext) =>
+    {
+        var form = await httpContext.Request.ReadFormAsync(httpContext.RequestAborted);
+        var user = userDirectory.Authenticate(form["token"].ToString());
+        if (user is null) return Results.Content(LoginPage("Invalid sign-in token."), "text/html", statusCode: StatusCodes.Status401Unauthorized);
+
+        var principal = TravelUserDirectory.CreatePrincipal(user, CookieAuthenticationDefaults.AuthenticationScheme);
+        await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+        return Results.Redirect("/devui/?entity_id=redis-iris-travel-assistant");
+    }).DisableAntiforgery();
+    app.MapPost("/logout", async (HttpContext httpContext) =>
+    {
+        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return Results.Redirect("/login");
+    }).RequireAuthorization().DisableAntiforgery();
+}
+
+var responsesEndpoints = app.MapOpenAIResponses();
+var conversationEndpoints = app.MapOpenAIConversations();
+if (userDirectory.IsMultiUser)
+{
+    responsesEndpoints.RequireAuthorization();
+    conversationEndpoints.RequireAuthorization();
+}
 app.MapDevUI();
 
-app.MapGet("/", () => Results.Content(Dashboard(ownerId, shortTermWindow), "text/html"));
+var dashboardEndpoint = app.MapGet("/", (TravelUserAccessor users) =>
+    Results.Content(Dashboard(users.Current, shortTermWindow, userDirectory.IsMultiUser), "text/html"));
 
-app.MapGet("/api/ram", async (IRedisAgentMemoryClient client, CancellationToken cancellationToken) =>
+var ramEndpoint = app.MapGet("/api/ram", async (
+    IRedisAgentMemoryClient client,
+    TravelUserAccessor users,
+    CancellationToken cancellationToken) =>
 {
-    var sessions = await ListOwnerSessionsAsync(client, ownerId, cancellationToken);
-    var memories = await ListOwnerMemoriesAsync(client, ownerId, cancellationToken);
+    var user = users.Current;
+    var sessions = await ListOwnerSessionsAsync(client, user.IsolationKey, cancellationToken);
+    var memories = await ListOwnerMemoriesAsync(client, user.IsolationKey, cancellationToken);
     return Results.Ok(new
     {
-        ownerId,
+        tenantId = user.TenantId,
+        ownerId = user.IsolationKey,
         shortTermWindow,
         sessions,
         longTermMemories = memories,
@@ -166,12 +240,13 @@ app.MapGet("/api/ram", async (IRedisAgentMemoryClient client, CancellationToken 
     });
 });
 
-app.MapGet("/api/context/model", (ContextDataModel contextModel) =>
+var contextModelEndpoint = app.MapGet("/api/context/model", (ContextDataModel contextModel) =>
     Results.Text(ContextDataModelJson.Serialize(contextModel), "application/json"));
 
-app.MapGet("/api/context/examples", () => Results.Json(TravelContext.Examples, contextJsonOptions));
+var contextExamplesEndpoint = app.MapGet("/api/context/examples", (TravelUserAccessor users) =>
+    Results.Json(TravelContext.ExamplesFor(users.Current), contextJsonOptions));
 
-app.MapGet("/api/context/status", (ContextRetrieverClientCache cache) =>
+var contextStatusEndpoint = app.MapGet("/api/context/status", (ContextRetrieverClientCache cache) =>
 {
     var health = cache.GetHealth();
     return Results.Ok(new
@@ -185,15 +260,17 @@ app.MapGet("/api/context/status", (ContextRetrieverClientCache cache) =>
     });
 });
 
-app.MapGet("/api/ram/sessions/{sessionId}", async (
+var ramSessionEndpoint = app.MapGet("/api/ram/sessions/{sessionId}", async (
     string sessionId,
     IRedisAgentMemoryClient client,
+    TravelUserAccessor users,
     CancellationToken cancellationToken) =>
 {
+    var user = users.Current;
     try
     {
         var session = await client.GetSessionMemoryAsync(sessionId, includeSummarizedEvents: true, cancellationToken);
-        return !string.Equals(session.OwnerId, ownerId, StringComparison.Ordinal)
+        return !string.Equals(session.OwnerId, user.IsolationKey, StringComparison.Ordinal)
             ? Results.Forbid()
             : Results.Ok(session);
     }
@@ -203,11 +280,14 @@ app.MapGet("/api/ram/sessions/{sessionId}", async (
     }
 });
 
-app.MapDelete("/api/ram", async (
+var clearRamEndpoint = app.MapDelete("/api/ram", async (
     string? confirm,
     IRedisAgentMemoryClient client,
+    TravelUserAccessor users,
     CancellationToken cancellationToken) =>
 {
+    var user = users.Current;
+    var ownerId = user.IsolationKey;
     if (!string.Equals(confirm, ownerId, StringComparison.Ordinal))
     {
         return Results.BadRequest(new { error = $"Set confirm={ownerId} to clear this owner's RAM data." });
@@ -232,7 +312,20 @@ app.MapDelete("/api/ram", async (
     return Results.Ok(new { ownerId, sessionsDeleted = sessionIds.Count, longTermMemoriesDeleted = memories.Count });
 });
 
-Console.WriteLine($"Redis Iris DevUI owner: {ownerId}");
+if (userDirectory.IsMultiUser)
+{
+    dashboardEndpoint.RequireAuthorization();
+    ramEndpoint.RequireAuthorization();
+    ramSessionEndpoint.RequireAuthorization();
+    clearRamEndpoint.RequireAuthorization();
+    contextModelEndpoint.RequireAuthorization();
+    contextExamplesEndpoint.RequireAuthorization();
+    contextStatusEndpoint.RequireAuthorization();
+}
+
+Console.WriteLine(userDirectory.IsMultiUser
+    ? "Redis Iris DevUI authentication: multi-user cookie mode"
+    : $"Redis Iris DevUI owner: {ownerId} (legacy single-user mode)");
 Console.WriteLine("Redis Context Retriever: configured (lazy MCP connection)");
 Console.WriteLine("Dashboard: http://localhost:5080/");
 Console.WriteLine("DevUI:     http://localhost:5080/devui");
@@ -279,7 +372,7 @@ static async Task<List<LongTermMemoryRecord>> ListOwnerMemoriesAsync(
     return items;
 }
 
-static string Dashboard(string ownerId, int shortTermWindow) => $$"""
+static string Dashboard(TravelUser user, int shortTermWindow, bool multiUser) => $$"""
     <!doctype html>
     <html lang="en">
     <head><meta charset="utf-8"><title>Redis Iris + Microsoft Agent Framework</title></head>
@@ -287,7 +380,9 @@ static string Dashboard(string ownerId, int shortTermWindow) => $$"""
       <h1>Redis Iris + Microsoft Agent Framework</h1>
       <p>This local sample hosts a travel assistant in Microsoft's official DevUI, persists its memory in Redis Agent Memory, and defines structured travel context for Redis Context Retriever.</p>
       <dl>
-        <dt><strong>RAM user/owner</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(ownerId)}}</code></dd>
+        <dt><strong>Tenant</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.TenantId)}}</code></dd>
+        <dt><strong>Traveler</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.TravelerId)}}</code></dd>
+        <dt><strong>RAM owner scope</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.IsolationKey)}}</code></dd>
         <dt><strong>Short-term window</strong></dt><dd>{{shortTermWindow}} recent messages</dd>
       </dl>
       <p><a href="/devui">Open the Agent Framework DevUI</a></p>
@@ -311,8 +406,26 @@ static string Dashboard(string ownerId, int shortTermWindow) => $$"""
       <p>The agent receives the surface's authorized MCP tools on every invocation. The model and example endpoints do not provision a surface or write records.</p>
       <h2>Cleanup</h2>
       <p>Delete both memory tiers with an explicit owner confirmation:</p>
-      <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(ownerId)}}'</pre>
+      <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(user.IsolationKey)}}'</pre>
+      {{(multiUser ? "<form method=\"post\" action=\"/logout\"><button type=\"submit\">Sign out</button></form>" : "")}}
       <p><strong>Development only:</strong> this sample intentionally refuses to run outside the Development environment.</p>
+    </body>
+    </html>
+    """;
+
+static string LoginPage(string? error = null) => $$"""
+    <!doctype html>
+    <html lang="en">
+    <head><meta charset="utf-8"><title>Redis Iris DevUI sign in</title></head>
+    <body style="font-family:system-ui;max-width:520px;margin:5rem auto;padding:0 1rem;line-height:1.5">
+      <h1>Redis Iris DevUI</h1>
+      <p>Enter a configured development-user token. The token selects a server-owned tenant, traveler, RAM owner, session partition, and Context Retriever agent key.</p>
+      {{(error is null ? "" : $"<p style=\"color:#b91c1c\">{System.Net.WebUtility.HtmlEncode(error)}</p>")}}
+      <form method="post" action="/login">
+        <label>Sign-in token<br><input name="token" type="password" autocomplete="current-password" required style="width:100%;padding:.6rem;margin:.4rem 0 1rem"></label>
+        <button type="submit">Sign in</button>
+      </form>
+      <p><strong>Development only:</strong> production applications should replace this local token directory with their OIDC or JWT authentication scheme.</p>
     </body>
     </html>
     """;
