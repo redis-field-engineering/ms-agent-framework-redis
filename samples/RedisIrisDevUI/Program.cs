@@ -38,6 +38,12 @@ if (args.Contains("--print-context-seed", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--print-context-users", StringComparer.Ordinal))
+{
+    Console.Write(JsonSerializer.Serialize(TravelContext.Users, contextJsonOptions));
+    return;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.AddFilter("System.Net.Http.HttpClient.Redis.Iris.AgentMemory", LogLevel.Warning);
 var endpoint = Required(builder.Configuration, "REDIS_IRIS_ENDPOINT");
@@ -51,7 +57,9 @@ var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 var travelContextModel = TravelContext.Model;
-var userDirectory = TravelUserDirectory.Parse(builder.Configuration["DEVUI_USERS_JSON"]);
+var userDirectory = TravelUserDirectory.Load(
+    builder.Configuration["DEVUI_USERS_FILE"],
+    builder.Configuration["DEVUI_USERS_JSON"]);
 var contextRetrieverAgentKey = userDirectory.IsMultiUser
     ? null
     : Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY");

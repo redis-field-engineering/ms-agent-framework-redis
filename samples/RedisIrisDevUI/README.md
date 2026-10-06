@@ -81,21 +81,16 @@ The agent key must belong to the provisioned travel surface and should carry onl
 
 ## Demonstrate multi-user isolation
 
-Create a separate Context Retriever agent key for each traveler. Each key must be restricted by both indexed access tags:
+The one-shot `context-provisioner` owns the demo credential lifecycle. In addition to creating or updating the surface, it reads the sample's trusted traveler profiles, mints one Context Retriever agent key per traveler with both `tenant_id` and `traveler_id` access tags, generates independent high-entropy DevUI sign-in tokens, and writes the complete runtime bundle to the ignored `artifacts/context-retriever/redis-iris-travel-users.json` file with mode `0600`. Agent keys and sign-in tokens are never printed.
+
+Run the provisioner before starting DevUI:
 
 ```bash
-ctxctl agent create --surface-id <surface-id> --name "Avery demo" \
-  --access-tags '{"tenant_id":["redis-travel-demo"],"traveler_id":["traveler-001"]}'
-
-ctxctl agent create --surface-id <surface-id> --name "Riley demo" \
-  --access-tags '{"tenant_id":["redis-travel-demo"],"traveler_id":["traveler-002"]}'
+docker compose --profile context-retriever run --rm context-provisioner
+docker compose up --build -d devui
 ```
 
-Then add a one-line JSON array to `.env.local`. Use independently generated high-entropy values for `signInToken`; these local tokens are development credentials and must not be committed:
-
-```dotenv
-DEVUI_USERS_JSON='[{"subject":"avery-demo","displayName":"Avery Morgan","tenantId":"redis-travel-demo","travelerId":"traveler-001","signInToken":"<random-local-token-1>","contextRetrieverAgentKey":"<avery-scoped-agent-key>","contextRetrieverCredentialVersion":"avery-v1"},{"subject":"riley-demo","displayName":"Riley Chen","tenantId":"redis-travel-demo","travelerId":"traveler-002","signInToken":"<random-local-token-2>","contextRetrieverAgentKey":"<riley-scoped-agent-key>","contextRetrieverCredentialVersion":"riley-v1"}]'
-```
+The DevUI container mounts that bundle read-only and enables multi-user mode automatically. To retrieve a local sign-in token, inspect the ignored credential file directly; do not commit or share it. Provisioning is idempotent while that file is retained. Because the control plane only returns a full agent key at creation time, deleting the local bundle requires explicitly deleting or rotating the corresponding managed agents before generating a replacement.
 
 When this setting contains at least two users, the sample enables cookie authentication and Agent Framework session isolation. Open `/login`, enter one user’s local token, and then use DevUI normally. The authenticated server-side mapping supplies all of the following; none are accepted from model tool arguments:
 
@@ -104,7 +99,7 @@ When this setting contains at least two users, the sample enables cookie authent
 - Context Retriever access-profile ID and scoped agent key
 - Filtering for the `/api/context/examples` inspection endpoint
 
-Sign out before testing the second traveler. The two configured Context Retriever keys must be distinct; using a shared key would defeat server-side traveler isolation. In production, replace this local token directory with OIDC/JWT or another ASP.NET Core authentication scheme while retaining the same claim-to-scope mapping.
+Sign out before testing the second traveler. The two provisioned Context Retriever keys are distinct; using a shared key would defeat server-side traveler isolation. In production, replace this local bootstrap bundle with OIDC/JWT plus a dedicated credential broker or secret store while retaining the same claim-to-scope mapping. Runtime application instances should never receive Context Retriever administrative credentials.
 
 ## Run the Docker observability demo
 

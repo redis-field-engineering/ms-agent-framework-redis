@@ -47,6 +47,9 @@ services:
       OTEL_SERVICE_NAME: redis-iris-devui
       REDIS_IRIS_DEMO_TELEMETRY: "false"
       DEVUI_ALLOW_REMOTE_ACCESS: "true"
+      DEVUI_USERS_FILE: /run/redis-iris/context-retriever/redis-iris-travel-users.json
+    volumes:
+      - ./artifacts/context-retriever:/run/redis-iris/context-retriever:ro
     ports:
       - "127.0.0.1:5080:8080"
     depends_on:

@@ -144,6 +144,12 @@ internal static class TravelContext
             },
         ]);
 
+    internal static IReadOnlyList<TravelUserProvisioningProfile> Users { get; } =
+    [
+        new("avery-demo", "Avery Morgan", DemoTenantId, "traveler-001"),
+        new("riley-demo", "Riley Chen", DemoTenantId, "traveler-002"),
+    ];
+
     internal static TravelContextSeed ExamplesFor(TravelUser user) => new(
         Examples.Travelers.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray(),
         Examples.Flights.Where(item => item.TenantId == user.TenantId && item.TravelerId == user.TravelerId).ToArray(),

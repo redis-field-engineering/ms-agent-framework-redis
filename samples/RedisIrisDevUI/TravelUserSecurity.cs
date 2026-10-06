@@ -20,6 +20,12 @@ internal sealed record TravelUser(
     public string IsolationKey => $"{TenantId}:{TravelerId}";
 }
 
+internal sealed record TravelUserProvisioningProfile(
+    string Subject,
+    string DisplayName,
+    string TenantId,
+    string TravelerId);
+
 internal sealed class TravelUserDirectory
 {
     internal const string TenantClaim = "tenant_id";
@@ -61,6 +67,16 @@ internal sealed class TravelUserDirectory
         }
 
         return new(users);
+    }
+
+    public static TravelUserDirectory Load(string? path, string? json)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            return Parse(File.ReadAllText(path));
+        }
+
+        return Parse(json);
     }
 
     public TravelUser? Authenticate(string candidateToken)
