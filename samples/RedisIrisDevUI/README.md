@@ -16,7 +16,7 @@ Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or 
 
 ## Inspect the structured travel model
 
-The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`.
+The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`. Every entity carries indexed `tenant_id` and `traveler_id` authorization tags, and every Redis key includes the same composite boundary.
 
 | Surface | Purpose |
 | --- | --- |
@@ -63,7 +63,9 @@ After the surface exists, run the one-shot seeder with the same admin URL, admin
 docker compose --profile context-retriever run --rm --build context-seeder
 ```
 
-The seeder generates `artifacts/context-retriever/redis-iris-travel-context-seed.json` from the sample's POCO instances, resolves exactly one surface by name, and imports `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt` separately. Stable record IDs and `on_conflict=overwrite` make repeated runs safe. A missing surface, duplicate surface names, validation error, or partial import causes the job to fail.
+The seeder generates `artifacts/context-retriever/redis-iris-travel-context-seed.json` from the sample's POCO instances, resolves exactly one surface by name, and imports `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt` separately. It includes two travelers so access isolation can be tested. Stable composite keys and `on_conflict=overwrite` make repeated runs safe. A missing surface, duplicate surface names, validation error, or partial import causes the job to fail.
+
+Context Retriever access tags must use the same `tenant_id` and `traveler_id` names. These fields make server-side ACL filtering possible; model-supplied filters alone are not an authorization boundary.
 
 The records are synthetic demonstration data. Production applications should ingest authoritative records through an appropriately authenticated system-of-record workflow rather than ship the admin key with the application.
 

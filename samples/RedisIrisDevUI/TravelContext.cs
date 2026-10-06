@@ -7,6 +7,8 @@ namespace RedisIrisDevUI;
 
 internal static class TravelContext
 {
+    internal const string DemoTenantId = "redis-travel-demo";
+
     internal static ContextDataModel Model { get; } = ContextModelCompiler.Compile(
         "Redis Iris travel agency",
         "Structured traveler, flight, hotel, and receipt context for the DevUI sample.",
@@ -21,16 +23,28 @@ internal static class TravelContext
         {
             new Traveler
             {
+                TenantId = DemoTenantId,
                 Id = "traveler-001",
+                TravelerId = "traveler-001",
                 FullName = "Avery Morgan",
                 LoyaltyTier = "gold",
                 HomeAirport = "BOS",
+            },
+            new Traveler
+            {
+                TenantId = DemoTenantId,
+                Id = "traveler-002",
+                TravelerId = "traveler-002",
+                FullName = "Riley Chen",
+                LoyaltyTier = "silver",
+                HomeAirport = "SEA",
             },
         },
         flights = new[]
         {
             new FlightReservation
             {
+                TenantId = DemoTenantId,
                 Id = "flight-001",
                 TravelerId = "traveler-001",
                 ConfirmationCode = "IRIS42",
@@ -43,11 +57,27 @@ internal static class TravelContext
                 ArrivalTime = new DateTimeOffset(2027, 2, 8, 20, 5, 0, TimeSpan.Zero),
                 CabinClass = "business",
             },
+            new FlightReservation
+            {
+                TenantId = DemoTenantId,
+                Id = "flight-002",
+                TravelerId = "traveler-002",
+                ConfirmationCode = "IRIS84",
+                Status = "confirmed",
+                Carrier = "Redis Air",
+                FlightNumber = "RA108",
+                OriginAirport = "SEA",
+                DestinationAirport = "JFK",
+                DepartureTime = new DateTimeOffset(2027, 3, 14, 15, 10, 0, TimeSpan.Zero),
+                ArrivalTime = new DateTimeOffset(2027, 3, 14, 20, 35, 0, TimeSpan.Zero),
+                CabinClass = "economy",
+            },
         },
         hotels = new[]
         {
             new HotelReservation
             {
+                TenantId = DemoTenantId,
                 Id = "hotel-001",
                 TravelerId = "traveler-001",
                 ConfirmationCode = "HTL-6379",
@@ -58,11 +88,25 @@ internal static class TravelContext
                 CheckOut = new DateTimeOffset(2027, 2, 12, 11, 0, 0, TimeSpan.FromHours(-8)),
                 RoomType = "king",
             },
+            new HotelReservation
+            {
+                TenantId = DemoTenantId,
+                Id = "hotel-002",
+                TravelerId = "traveler-002",
+                ConfirmationCode = "HTL-6380",
+                Status = "confirmed",
+                PropertyName = "The Manhattan Redis",
+                City = "New York",
+                CheckIn = new DateTimeOffset(2027, 3, 14, 16, 0, 0, TimeSpan.FromHours(-4)),
+                CheckOut = new DateTimeOffset(2027, 3, 17, 11, 0, 0, TimeSpan.FromHours(-4)),
+                RoomType = "queen",
+            },
         },
         receipts = new[]
         {
             new TravelReceipt
             {
+                TenantId = DemoTenantId,
                 Id = "receipt-001",
                 TravelerId = "traveler-001",
                 FlightReservationId = "flight-001",
@@ -75,6 +119,7 @@ internal static class TravelContext
             },
             new TravelReceipt
             {
+                TenantId = DemoTenantId,
                 Id = "receipt-002",
                 TravelerId = "traveler-001",
                 HotelReservationId = "hotel-001",
@@ -85,15 +130,34 @@ internal static class TravelContext
                 Currency = "USD",
                 PurchasedAt = new DateTimeOffset(2026, 10, 2, 14, 24, 0, TimeSpan.Zero),
             },
+            new TravelReceipt
+            {
+                TenantId = DemoTenantId,
+                Id = "receipt-003",
+                TravelerId = "traveler-002",
+                FlightReservationId = "flight-002",
+                Category = "flight",
+                Merchant = "Redis Air",
+                Description = "Round-trip airfare from Seattle to New York",
+                Amount = 642.15m,
+                Currency = "USD",
+                PurchasedAt = new DateTimeOffset(2026, 10, 4, 17, 5, 0, TimeSpan.Zero),
+            },
         },
     };
 }
 
-[ContextEntity(KeyTemplate = "traveler:{id}", Description = "A travel agency customer")]
+[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}", Description = "A travel agency customer")]
 internal sealed class Traveler
 {
-    [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable traveler ID")]
+    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    public required string TenantId { get; init; }
+
+    [ContextField(Name = "id", Index = ContextIndex.Tag, Description = "Stable traveler ID")]
     public required string Id { get; init; }
+
+    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler authorization boundary")]
+    public required string TravelerId { get; init; }
 
     [ContextField(Name = "full_name", Index = ContextIndex.Text, Description = "Traveler's full name")]
     public required string FullName { get; init; }
@@ -105,13 +169,16 @@ internal sealed class Traveler
     public required string HomeAirport { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "flight-reservation:{id}", Description = "A booked airline itinerary")]
+[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:flight-reservation:{id}", Description = "A booked airline itinerary")]
 internal sealed class FlightReservation
 {
+    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    public required string TenantId { get; init; }
+
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable flight reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Airline confirmation code")]
@@ -146,13 +213,16 @@ internal sealed class FlightReservation
     public Traveler? Traveler { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "hotel-reservation:{id}", Description = "A booked hotel stay")]
+[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:hotel-reservation:{id}", Description = "A booked hotel stay")]
 internal sealed class HotelReservation
 {
+    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    public required string TenantId { get; init; }
+
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable hotel reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Hotel confirmation code")]
@@ -181,13 +251,16 @@ internal sealed class HotelReservation
     public Traveler? Traveler { get; init; }
 }
 
-[ContextEntity(KeyTemplate = "travel-receipt:{id}", Description = "A receipt for a travel purchase")]
+[ContextEntity(KeyTemplate = "tenant:{tenant_id}:traveler:{traveler_id}:travel-receipt:{id}", Description = "A receipt for a travel purchase")]
 internal sealed class TravelReceipt
 {
+    [ContextField(Name = "tenant_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    public required string TenantId { get; init; }
+
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable receipt ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler associated with the purchase")]
+    [ContextField(Name = "traveler_id", IsKeyComponent = true, Index = ContextIndex.Tag, Description = "Traveler associated with the purchase")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "flight_reservation_id", Index = ContextIndex.Tag, Description = "Related flight reservation, when applicable")]
