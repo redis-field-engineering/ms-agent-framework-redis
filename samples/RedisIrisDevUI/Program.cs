@@ -129,7 +129,7 @@ builder.Services.AddRedisIrisAgentMemory(options =>
     options.AuthorizationPolicy = identity =>
     {
         var user = userAccessor.Current;
-        return identity.TenantId == user.TenantId && identity.OwnerId == user.IsolationKey;
+        return identity.TenantId == user.TenantId && identity.OwnerId == user.RamOwnerId;
     };
     options.ChatHistory.MaxMessagesToRetrieve = shortTermWindow;
     options.Memory.Search = new() { Limit = 5, SimilarityThreshold = 0.25 };
@@ -235,12 +235,12 @@ var ramEndpoint = app.MapGet("/api/ram", async (
     CancellationToken cancellationToken) =>
 {
     var user = users.Current;
-    var sessions = await ListOwnerSessionsAsync(client, user.IsolationKey, cancellationToken);
-    var memories = await ListOwnerMemoriesAsync(client, user.IsolationKey, cancellationToken);
+    var sessions = await ListOwnerSessionsAsync(client, user.RamOwnerId, cancellationToken);
+    var memories = await ListOwnerMemoriesAsync(client, user.RamOwnerId, cancellationToken);
     return Results.Ok(new
     {
         tenantId = user.TenantId,
-        ownerId = user.IsolationKey,
+        ownerId = user.RamOwnerId,
         shortTermWindow,
         sessions,
         longTermMemories = memories,
@@ -278,7 +278,7 @@ var ramSessionEndpoint = app.MapGet("/api/ram/sessions/{sessionId}", async (
     try
     {
         var session = await client.GetSessionMemoryAsync(sessionId, includeSummarizedEvents: true, cancellationToken);
-        return !string.Equals(session.OwnerId, user.IsolationKey, StringComparison.Ordinal)
+        return !string.Equals(session.OwnerId, user.RamOwnerId, StringComparison.Ordinal)
             ? Results.Forbid()
             : Results.Ok(session);
     }
@@ -295,7 +295,7 @@ var clearRamEndpoint = app.MapDelete("/api/ram", async (
     CancellationToken cancellationToken) =>
 {
     var user = users.Current;
-    var ownerId = user.IsolationKey;
+    var ownerId = user.RamOwnerId;
     if (!string.Equals(confirm, ownerId, StringComparison.Ordinal))
     {
         return Results.BadRequest(new { error = $"Set confirm={ownerId} to clear this owner's RAM data." });
@@ -390,7 +390,7 @@ static string Dashboard(TravelUser user, int shortTermWindow, bool multiUser) =>
       <dl>
         <dt><strong>Tenant</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.TenantId)}}</code></dd>
         <dt><strong>Traveler</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.TravelerId)}}</code></dd>
-        <dt><strong>RAM owner scope</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.IsolationKey)}}</code></dd>
+        <dt><strong>RAM owner scope</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.RamOwnerId)}}</code></dd>
         <dt><strong>Short-term window</strong></dt><dd>{{shortTermWindow}} recent messages</dd>
       </dl>
       <p><a href="/devui">Open the Agent Framework DevUI</a></p>
@@ -414,7 +414,7 @@ static string Dashboard(TravelUser user, int shortTermWindow, bool multiUser) =>
       <p>The agent receives the surface's authorized MCP tools on every invocation. The model and example endpoints do not provision a surface or write records.</p>
       <h2>Cleanup</h2>
       <p>Delete both memory tiers with an explicit owner confirmation:</p>
-      <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(user.IsolationKey)}}'</pre>
+      <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(user.RamOwnerId)}}'</pre>
       {{(multiUser ? "<form method=\"post\" action=\"/logout\"><button type=\"submit\">Sign out</button></form>" : "")}}
       <p><strong>Development only:</strong> this sample intentionally refuses to run outside the Development environment.</p>
     </body>

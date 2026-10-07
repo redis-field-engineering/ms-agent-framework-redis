@@ -18,6 +18,9 @@ internal sealed record TravelUser(
     string ContextRetrieverCredentialVersion)
 {
     public string IsolationKey => $"{TenantId}:{TravelerId}";
+
+    // RAM owner IDs use a storage-safe, unambiguous length-prefixed composite.
+    public string RamOwnerId => $"{TenantId.Length}-{TenantId}-{TravelerId.Length}-{TravelerId}";
 }
 
 internal sealed record TravelUserProvisioningProfile(

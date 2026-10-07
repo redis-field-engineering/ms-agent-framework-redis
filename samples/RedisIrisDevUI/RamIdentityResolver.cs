@@ -18,7 +18,7 @@ internal sealed class RamIdentityResolver(TravelUserAccessor users)
         {
             var created = new RedisIrisIdentityContext(
                 TenantId: user.TenantId,
-                OwnerId: user.IsolationKey,
+                OwnerId: user.RamOwnerId,
                 SessionId: $"redis-iris-devui-{Guid.NewGuid():N}",
                 ActorId: user.Subject,
                 AgentId: "redis-iris-travel-assistant");
@@ -28,7 +28,7 @@ internal sealed class RamIdentityResolver(TravelUserAccessor users)
             return created;
         });
         if (!string.Equals(identity.TenantId, user.TenantId, StringComparison.Ordinal) ||
-            !string.Equals(identity.OwnerId, user.IsolationKey, StringComparison.Ordinal))
+            !string.Equals(identity.OwnerId, user.RamOwnerId, StringComparison.Ordinal))
         {
             throw new UnauthorizedAccessException("The agent session belongs to a different tenant or traveler.");
         }

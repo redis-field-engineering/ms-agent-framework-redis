@@ -95,7 +95,7 @@ The DevUI container mounts that bundle read-only and enables multi-user mode aut
 When this setting contains at least two users, the sample enables cookie authentication and Agent Framework session isolation. Open `/login`, enter one user’s local token, and then use DevUI normally. The authenticated server-side mapping supplies all of the following; none are accepted from model tool arguments:
 
 - Agent Framework isolation key: `tenant_id:traveler_id`
-- RAM tenant and actor identity, with the owner scoped as `tenant_id:traveler_id`
+- RAM tenant and actor identity, with a storage-safe length-prefixed owner derived from `tenant_id` and `traveler_id`
 - Context Retriever access-profile ID and scoped agent key
 - Filtering for the `/api/context/examples` inspection endpoint
 
