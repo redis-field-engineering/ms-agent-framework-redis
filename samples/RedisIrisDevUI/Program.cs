@@ -20,6 +20,7 @@ using Redis.Iris.ContextRetriever.Modeling;
 using RedisIrisDevUI;
 
 const string AgentName = "redis-iris-travel-assistant";
+const string AgentTelemetrySourceName = "Redis.Iris.DevUI.Agent";
 var contextJsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
 {
     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -84,6 +85,7 @@ if (!string.IsNullOrWhiteSpace(otlpEndpoint))
             // ASP.NET Core creates an ambient request Activity even when HTTP instrumentation is not exported.
             // Sample the explicitly registered connector source instead of inheriting that unsampled parent.
             .SetSampler(new AlwaysOnSampler())
+            .AddSource(AgentTelemetrySourceName)
             .AddSource(AgentMemoryDiagnostics.ActivitySourceName)
             .AddSource(ContextRetrieverDiagnostics.ActivitySourceName)
             .AddOtlpExporter())
@@ -168,7 +170,10 @@ builder.AddAIAgent(AgentName, (services, name) =>
             services.GetRequiredService<RedisIrisMemoryProvider>(),
             services.GetRequiredService<RedisContextRetrieverProvider>(),
         ],
-    }))
+    })
+    .AsBuilder()
+    .UseOpenTelemetry(AgentTelemetrySourceName)
+    .Build(services))
     .WithInMemorySessionStore(withIsolation: userDirectory.IsMultiUser);
 
 builder.Services.AddOpenAIResponses();
