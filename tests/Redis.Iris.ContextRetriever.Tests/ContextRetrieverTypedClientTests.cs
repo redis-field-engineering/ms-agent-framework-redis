@@ -31,6 +31,39 @@ public sealed class ContextRetrieverTypedClientTests
         await Assert.ThrowsAsync<ContextRetrieverDiscoveryException>(() => typed.InvokeAsync<Customer>("get_customer_by_id", new Dictionary<string, object?>()));
     }
 
+    [Fact]
+    public async Task ReadsSdkResultObjectsUsingWebPropertyNames()
+    {
+        var tool = AIFunctionFactory.Create(
+            () => new ToolResult([new ToolContent("text", "{\"id\":\"42\",\"name\":\"Ada\"}")], false),
+            "get_customer_by_id");
+        var typed = new ContextRetrieverTypedClient(
+            new Client([tool]),
+            ContextModelCompiler.Compile("Commerce", "", typeof(Customer)));
+
+        var customer = await typed.GetByIdAsync<Customer>("ignored");
+
+        Assert.NotNull(customer);
+        Assert.Equal("42", customer.Id);
+        Assert.Equal("Ada", customer.Name);
+    }
+
+    [Fact]
+    public async Task ReadsTheTextContentShapeReturnedByMcpTools()
+    {
+        var tool = AIFunctionFactory.Create(
+            () => new TextContent("{\"id\":\"42\",\"name\":\"Ada\"}"),
+            "get_customer_by_id");
+        var typed = new ContextRetrieverTypedClient(
+            new Client([tool]),
+            ContextModelCompiler.Compile("Commerce", "", typeof(Customer)));
+
+        var customer = await typed.GetByIdAsync<Customer>("ignored");
+
+        Assert.NotNull(customer);
+        Assert.Equal("42", customer.Id);
+    }
+
     [ContextEntity(KeyTemplate = "customer:{id}")]
     private sealed class Customer
     {
@@ -43,4 +76,7 @@ public sealed class ContextRetrieverTypedClientTests
         public IReadOnlyList<AIFunction> Tools => tools;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+
+    private sealed record ToolResult(IReadOnlyList<ToolContent> Content, bool IsError);
+    private sealed record ToolContent(string Type, string Text);
 }

@@ -37,7 +37,7 @@ public sealed class ContextRetrieverTypedClient
         var tool = _client.Tools.SingleOrDefault(candidate => candidate.Name == toolName)
             ?? throw new ContextRetrieverDiscoveryException($"Authorized Context Retriever tool '{toolName}' was not discovered.");
         var result = await tool.InvokeAsync(new AIFunctionArguments(arguments.ToDictionary(pair => pair.Key, pair => pair.Value)), cancellationToken).ConfigureAwait(false);
-        var payload = ExtractPayload(result, toolName);
+        var payload = ExtractPayload(result, toolName, _serializerOptions);
         return payload.Deserialize<TResult>(_serializerOptions);
     }
 
@@ -54,9 +54,14 @@ public sealed class ContextRetrieverTypedClient
         return InvokeAsync<TEntity>(toolName, new Dictionary<string, object?> { [key[0].Name] = id }, cancellationToken);
     }
 
-    private static JsonElement ExtractPayload(object? result, string toolName)
+    private static JsonElement ExtractPayload(object? result, string toolName, JsonSerializerOptions serializerOptions)
     {
-        if (result is not JsonElement root) root = JsonSerializer.SerializeToElement(result);
+        if (result is TextContent textContent)
+        {
+            try { return JsonDocument.Parse(textContent.Text).RootElement.Clone(); }
+            catch (JsonException ex) { throw new ContextRetrieverException($"Context Retriever tool '{toolName}' returned non-JSON text.", ex); }
+        }
+        if (result is not JsonElement root) root = JsonSerializer.SerializeToElement(result, serializerOptions);
         if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("isError", out var isError) && isError.ValueKind == JsonValueKind.True)
             throw new ContextRetrieverException($"Context Retriever tool '{toolName}' returned an application error.");
         if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("structuredContent", out var structured) && structured.ValueKind is not JsonValueKind.Null and not JsonValueKind.Undefined)
