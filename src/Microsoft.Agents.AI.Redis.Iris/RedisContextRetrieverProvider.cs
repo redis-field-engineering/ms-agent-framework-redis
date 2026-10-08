@@ -1,5 +1,9 @@
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Redis.Iris.ContextRetriever;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Microsoft.Agents.AI.Redis.Iris;
 
@@ -18,6 +22,11 @@ public sealed class RedisContextRetrieverOptions
     public TimeSpan ExecutionTimeout { get; init; } = TimeSpan.FromSeconds(30);
     /// <summary>Per-profile concurrent tool execution limit.</summary>
     public int MaximumConcurrentToolExecutions { get; init; } = 8;
+    /// <summary>
+    /// Context entity fields whose values are supplied by server-side access tags and must not be selected by the model.
+    /// Matching fields are removed from tag-condition schemas and rejected if supplied at execution time.
+    /// </summary>
+    public IReadOnlyCollection<string> AuthorizationOwnedFilterFields { get; init; } = [];
 }
 
 /// <summary>Supplies principal-authorized Redis Context Retriever tools for each invocation.</summary>
@@ -61,9 +70,109 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
             MaximumConcurrentToolExecutions = _options.MaximumConcurrentToolExecutions,
         }, cancellationToken).ConfigureAwait(false);
 
-        return new AIContext { Tools = client.Tools };
+        var protectedFields = _options.AuthorizationOwnedFilterFields.ToHashSet(StringComparer.Ordinal);
+        var boundArguments = profile.BoundToolArguments ?? new Dictionary<string, IReadOnlyDictionary<string, object?>>();
+        return new AIContext
+        {
+            Tools = protectedFields.Count == 0 && boundArguments.Count == 0
+                ? client.Tools
+                : client.Tools.Select(tool => (AIFunction)new AuthorizationBoundaryAIFunction(
+                    tool,
+                    protectedFields,
+                    boundArguments.TryGetValue(tool.Name, out var arguments) ? arguments : null)).ToArray(),
+        };
     }
 
     /// <inheritdoc />
     public ValueTask DisposeAsync() => _ownsClients ? _clients.DisposeAsync() : ValueTask.CompletedTask;
+
+    private sealed class AuthorizationBoundaryAIFunction : AIFunction
+    {
+        private readonly AIFunction _inner;
+        private readonly IReadOnlySet<string> _protectedFields;
+        private readonly IReadOnlyDictionary<string, object?> _boundArguments;
+        private readonly JsonElement _jsonSchema;
+
+        public AuthorizationBoundaryAIFunction(
+            AIFunction inner,
+            IReadOnlySet<string> protectedFields,
+            IReadOnlyDictionary<string, object?>? boundArguments)
+        {
+            _inner = inner;
+            _protectedFields = protectedFields;
+            _boundArguments = boundArguments ?? new Dictionary<string, object?>();
+            _jsonSchema = RewriteSchema(inner.JsonSchema, protectedFields, _boundArguments.Keys);
+        }
+
+        public override string Name => _inner.Name;
+        public override string Description => _boundArguments.Count == 0
+            ? _inner.Description
+            : _inner.Description + " Authorized identity arguments are supplied automatically; do not provide them.";
+        public override JsonElement JsonSchema => _jsonSchema;
+        public override JsonElement? ReturnJsonSchema => _inner.ReturnJsonSchema;
+        public override JsonSerializerOptions JsonSerializerOptions => _inner.JsonSerializerOptions;
+        public override MethodInfo? UnderlyingMethod => _inner.UnderlyingMethod;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            if (arguments.TryGetValue("tag_conditions", out var value) && value is not null)
+            {
+                var conditions = JsonSerializer.SerializeToElement(value, _inner.JsonSerializerOptions);
+                if (conditions.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var condition in conditions.EnumerateArray())
+                    {
+                        if (condition.ValueKind == JsonValueKind.Object &&
+                            condition.TryGetProperty("field", out var field) &&
+                            field.ValueKind == JsonValueKind.String &&
+                            _protectedFields.Contains(field.GetString()!))
+                        {
+                            throw new ContextRetrieverAccessDeniedException(
+                                $"Context Retriever field '{field.GetString()}' is authorization-owned and cannot be supplied as a tool filter.");
+                        }
+                    }
+                }
+            }
+
+            if (_boundArguments.Count == 0) return _inner.InvokeAsync(arguments, cancellationToken);
+
+            var effectiveArguments = arguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            foreach (var (name, boundValue) in _boundArguments) effectiveArguments[name] = boundValue;
+            return _inner.InvokeAsync(new AIFunctionArguments(effectiveArguments), cancellationToken);
+        }
+
+        private static JsonElement RewriteSchema(
+            JsonElement schema,
+            IReadOnlySet<string> protectedFields,
+            IEnumerable<string> boundArgumentNames)
+        {
+            var root = JsonNode.Parse(schema.GetRawText());
+            var values = root?["properties"]?["tag_conditions"]?["items"]?["properties"]?["field"]?["enum"] as JsonArray;
+            if (values is not null)
+            {
+                for (var index = values.Count - 1; index >= 0; index--)
+                {
+                    if (values[index] is JsonValue item && item.TryGetValue<string>(out var value) && protectedFields.Contains(value))
+                        values.RemoveAt(index);
+                }
+            }
+
+            if (root?["properties"] is JsonObject properties)
+            {
+                foreach (var name in boundArgumentNames) properties.Remove(name);
+            }
+            if (root?["required"] is JsonArray required)
+            {
+                for (var index = required.Count - 1; index >= 0; index--)
+                {
+                    if (required[index] is JsonValue item && item.TryGetValue<string>(out var name) && boundArgumentNames.Contains(name, StringComparer.Ordinal))
+                        required.RemoveAt(index);
+                }
+            }
+
+            return root is null ? schema.Clone() : JsonSerializer.SerializeToElement(root, _innerSchemaOptions);
+        }
+
+        private static readonly JsonSerializerOptions _innerSchemaOptions = new();
+    }
 }

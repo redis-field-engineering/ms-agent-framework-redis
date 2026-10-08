@@ -44,6 +44,65 @@ public sealed class RedisContextRetrieverProviderTests
             () => provider.InvokingAsync(new(s_agent, null, new())).AsTask());
     }
 
+    [Fact]
+    public async Task AuthorizationOwnedFieldsAreHiddenAndRejected()
+    {
+        var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
+            ValueTask.FromResult(new ContextRetrieverAccessProfile(
+                new Uri("https://context.example.test/mcp"), "traveler-a",
+                new FixedContextRetrieverCredentialProvider(new("secret", "v1")))));
+        var inner = AIFunctionFactory.Create(
+            (IEnumerable<TagCondition> tag_conditions) => tag_conditions.Count(),
+            "filter_traveler");
+        await using var cache = new ContextRetrieverClientCache(new FixedToolFactory(inner));
+        var provider = new RedisContextRetrieverProvider(resolver, cache, new RedisContextRetrieverOptions
+        {
+            AuthorizationOwnedFilterFields = ["tenant_id", "traveler_id"],
+        });
+
+        var context = await provider.InvokingAsync(new(s_agent, null, new()));
+        var tool = Assert.IsAssignableFrom<AIFunction>(Assert.Single(context.Tools!));
+        var schema = tool.JsonSchema.GetRawText();
+        Assert.DoesNotContain("tenant_id", schema);
+        Assert.DoesNotContain("traveler_id", schema);
+
+        var denied = new AIFunctionArguments(new Dictionary<string, object?>
+        {
+            ["tag_conditions"] = new[] { new TagCondition("traveler_id", "internal-owner") },
+        });
+        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => tool.InvokeAsync(denied).AsTask());
+
+        var allowed = new AIFunctionArguments(new Dictionary<string, object?>
+        {
+            ["tag_conditions"] = new[] { new TagCondition("status", "confirmed") },
+        });
+        Assert.Equal("1", (await tool.InvokeAsync(allowed))?.ToString());
+    }
+
+    [Fact]
+    public async Task TrustedToolArgumentsAreHiddenAndOverrideModelArguments()
+    {
+        var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
+            ValueTask.FromResult(new ContextRetrieverAccessProfile(
+                new Uri("https://context.example.test/mcp"), "traveler-a",
+                new FixedContextRetrieverCredentialProvider(new("secret", "v1")),
+                new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal)
+                {
+                    ["get_traveler_by_id"] = new Dictionary<string, object?> { ["id"] = "traveler-001" },
+                })));
+        var inner = AIFunctionFactory.Create((string id) => id, "get_traveler_by_id");
+        await using var cache = new ContextRetrieverClientCache(new FixedToolFactory(inner));
+        var provider = new RedisContextRetrieverProvider(resolver, cache);
+
+        var context = await provider.InvokingAsync(new(s_agent, null, new()));
+        var tool = Assert.IsAssignableFrom<AIFunction>(Assert.Single(context.Tools!));
+        Assert.False(tool.JsonSchema.GetProperty("properties").TryGetProperty("id", out _));
+        Assert.DoesNotContain("id", tool.JsonSchema.GetProperty("required").EnumerateArray().Select(item => item.GetString()));
+
+        var supplied = new AIFunctionArguments(new Dictionary<string, object?> { ["id"] = "ram-owner-id" });
+        Assert.Equal("traveler-001", (await tool.InvokeAsync(supplied))?.ToString());
+    }
+
     private sealed class ProfileToolFactory : IContextRetrieverClientFactory
     {
         public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default)
@@ -59,6 +118,16 @@ public sealed class RedisContextRetrieverProviderTests
         public IReadOnlyList<AIFunction> Tools => tools;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+
+    private sealed class FixedToolFactory(AIFunction tool) : IContextRetrieverClientFactory
+    {
+        public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IContextRetrieverClient>(new Client([tool]));
+    }
+
+    private sealed record TagCondition(
+        [property: System.Text.Json.Serialization.JsonPropertyName("field")] string Field,
+        [property: System.Text.Json.Serialization.JsonPropertyName("value")] string Value);
 
     private sealed class StubAgent : AIAgent
     {

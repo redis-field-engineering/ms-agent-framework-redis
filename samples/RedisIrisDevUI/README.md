@@ -16,7 +16,7 @@ Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or 
 
 ## Inspect the structured travel model
 
-The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`. Every entity carries indexed `tenant_id` and `traveler_id` authorization tags; stable entity IDs remain the storage-key components.
+The sample defines ordinary application POCOs for `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt`. Their annotations compile at startup into the same deterministic DataModel accepted by `ctxctl surface create --datamodel`. Every entity maps its tag-indexed `tenant_id` and `traveler_id` fields through `acl_field_mappings`; stable entity IDs remain the storage-key components.
 
 | Surface | Purpose |
 | --- | --- |
@@ -33,7 +33,7 @@ dotnet run --project samples/RedisIrisDevUI -- --print-context-model
 
 ## Provision the managed Context Retriever surface
 
-The optional one-shot Compose provisioner generates this model inside Docker, checks for a surface with the configured stable name, and creates it only when absent. Add these values to the ignored `.env.local` file:
+The optional one-shot Compose provisioner generates this model inside Docker, checks for a surface with the configured stable name, creates it when absent, and updates its DataModel when present. Add these values to the ignored `.env.local` file:
 
 ```dotenv
 CONTEXT_RETRIEVER_ADMIN_URL="https://cloud.redis.io/context-surfaces"
@@ -51,7 +51,7 @@ Then run only the provisioner:
 docker compose --profile context-retriever run --rm --build context-provisioner
 ```
 
-The generated artifact is written to `artifacts/context-retriever/redis-iris-travel-context-model.json`. If exactly one surface with that name exists, the command exits successfully without changing it. To deliberately apply a newer generated model to that surface, set `CONTEXT_RETRIEVER_UPDATE_EXISTING=true`; duplicate names fail safely instead of selecting an arbitrary surface.
+The generated artifact is written to `artifacts/context-retriever/redis-iris-travel-context-model.json`. If exactly one surface with that name exists, its DataModel is updated by default so security mappings cannot remain stale. Set `CONTEXT_RETRIEVER_UPDATE_EXISTING=false` only when intentionally generating artifacts without applying them; duplicate names fail safely instead of selecting an arbitrary surface.
 
 The administrative URL/key above are control-plane credentials. Do not use the regional runtime URL ending in `/mcp` as `CONTEXT_RETRIEVER_ADMIN_URL`. The DevUI's runtime Context Retriever provider separately needs that MCP endpoint and a least-privilege agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
 
@@ -65,7 +65,9 @@ docker compose --profile context-retriever run --rm --build context-seeder
 
 The seeder generates `artifacts/context-retriever/redis-iris-travel-context-seed.json` from the sample's POCO instances, resolves exactly one surface by name, and imports `Traveler`, `FlightReservation`, `HotelReservation`, and `TravelReceipt` separately. It includes two travelers so access isolation can be tested. Stable composite keys and `on_conflict=overwrite` make repeated runs safe. A missing surface, duplicate surface names, validation error, or partial import causes the job to fail.
 
-Context Retriever access tags must use the same `tenant_id` and `traveler_id` names. These fields make server-side ACL filtering possible; model-supplied filters alone are not an authorization boundary.
+Context Retriever access tags must use the same `tenant_id` and `traveler_id` names. The POCOs declare `AccessTag` on both fields, causing the generated surface model to mark them for server-side ACL filtering; an ordinary TAG index or a model-supplied filter alone is not an authorization boundary.
+
+The DevUI also configures `AuthorizationOwnedFilterFields` for `tenant_id` and `traveler_id`. Those fields are removed from model-visible tag-condition enums and rejected if a caller nevertheless supplies them. Its trusted access resolver binds `get_traveler_by_id.id` to the authenticated user's domain traveler ID; that argument is removed from the model-visible schema and injected immediately before execution. The scoped agent key remains the source of Context Retriever authorization identity, while the separate composite RAM owner ID is never accepted as a Context Retriever entity identifier.
 
 The records are synthetic demonstration data. Production applications should ingest authoritative records through an appropriately authenticated system-of-record workflow rather than ship the admin key with the application.
 
