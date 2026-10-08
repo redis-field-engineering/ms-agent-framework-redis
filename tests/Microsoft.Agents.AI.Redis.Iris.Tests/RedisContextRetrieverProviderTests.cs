@@ -45,7 +45,7 @@ public sealed class RedisContextRetrieverProviderTests
     }
 
     [Fact]
-    public async Task AuthorizationOwnedFieldsAreHiddenAndIgnoredWhileOrdinaryFiltersRemain()
+    public async Task AuthorizationOwnedFieldsAreHiddenButRemainValidNarrowingFilters()
     {
         var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
             ValueTask.FromResult(new ContextRetrieverAccessProfile(
@@ -70,7 +70,7 @@ public sealed class RedisContextRetrieverProviderTests
         {
             ["tag_conditions"] = new[] { new TagCondition("traveler_id", "internal-owner") },
         });
-        Assert.Equal("0", (await tool.InvokeAsync(protectedOnly))?.ToString());
+        Assert.Equal("1", (await tool.InvokeAsync(protectedOnly))?.ToString());
 
         var mixed = new AIFunctionArguments(new Dictionary<string, object?>
         {
@@ -80,7 +80,7 @@ public sealed class RedisContextRetrieverProviderTests
                 new TagCondition("status", "confirmed"),
             },
         });
-        Assert.Equal("1", (await tool.InvokeAsync(mixed))?.ToString());
+        Assert.Equal("2", (await tool.InvokeAsync(mixed))?.ToString());
     }
 
     [Fact]

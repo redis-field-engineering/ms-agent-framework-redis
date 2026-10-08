@@ -24,7 +24,8 @@ public sealed class RedisContextRetrieverOptions
     public int MaximumConcurrentToolExecutions { get; init; } = 8;
     /// <summary>
     /// Context entity fields whose values are supplied by server-side access tags and must not be selected by the model.
-    /// Matching fields are removed from tag-condition schemas and ignored if redundantly supplied at execution time.
+    /// Matching fields are removed from tag-condition schemas. If supplied anyway, they are passed through as
+    /// ordinary narrowing predicates; the server-side access tags remain the authorization boundary.
     /// </summary>
     public IReadOnlyCollection<string> AuthorizationOwnedFilterFields { get; init; } = [];
 }
@@ -116,28 +117,9 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
         protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
             var effectiveArguments = arguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            if (arguments.TryGetValue("tag_conditions", out var value) && value is not null)
-            {
-                var conditions = JsonSerializer.SerializeToElement(value, _inner.JsonSerializerOptions);
-                if (conditions.ValueKind == JsonValueKind.Array)
-                {
-                    effectiveArguments["tag_conditions"] = conditions
-                        .EnumerateArray()
-                        .Where(condition => !IsProtectedCondition(condition))
-                        .Select(condition => condition.Clone())
-                        .ToArray();
-                }
-            }
-
             foreach (var (name, boundValue) in _boundArguments) effectiveArguments[name] = boundValue;
             return _inner.InvokeAsync(new AIFunctionArguments(effectiveArguments), cancellationToken);
         }
-
-        private bool IsProtectedCondition(JsonElement condition) =>
-            condition.ValueKind == JsonValueKind.Object &&
-            condition.TryGetProperty("field", out var field) &&
-            field.ValueKind == JsonValueKind.String &&
-            _protectedFields.Contains(field.GetString()!);
 
         private static JsonElement RewriteSchema(
             JsonElement schema,
