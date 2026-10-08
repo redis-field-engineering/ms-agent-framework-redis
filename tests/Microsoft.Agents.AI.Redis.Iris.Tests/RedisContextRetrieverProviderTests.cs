@@ -45,7 +45,7 @@ public sealed class RedisContextRetrieverProviderTests
     }
 
     [Fact]
-    public async Task AuthorizationOwnedFieldsAreHiddenButRemainValidNarrowingFilters()
+    public async Task AuthorizationOwnedFieldsAreHiddenAndRejected()
     {
         var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
             ValueTask.FromResult(new ContextRetrieverAccessProfile(
@@ -66,21 +66,17 @@ public sealed class RedisContextRetrieverProviderTests
         Assert.DoesNotContain("tenant_id", schema);
         Assert.DoesNotContain("traveler_id", schema);
 
-        var protectedOnly = new AIFunctionArguments(new Dictionary<string, object?>
+        var denied = new AIFunctionArguments(new Dictionary<string, object?>
         {
             ["tag_conditions"] = new[] { new TagCondition("traveler_id", "internal-owner") },
         });
-        Assert.Equal("1", (await tool.InvokeAsync(protectedOnly))?.ToString());
+        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => tool.InvokeAsync(denied).AsTask());
 
-        var mixed = new AIFunctionArguments(new Dictionary<string, object?>
+        var allowed = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["tag_conditions"] = new[]
-            {
-                new TagCondition("traveler_id", "internal-owner"),
-                new TagCondition("status", "confirmed"),
-            },
+            ["tag_conditions"] = new[] { new TagCondition("status", "confirmed") },
         });
-        Assert.Equal("2", (await tool.InvokeAsync(mixed))?.ToString());
+        Assert.Equal("1", (await tool.InvokeAsync(allowed))?.ToString());
     }
 
     [Fact]
