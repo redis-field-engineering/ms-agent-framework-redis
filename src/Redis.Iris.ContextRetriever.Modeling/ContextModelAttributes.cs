@@ -40,6 +40,11 @@ public sealed class ContextFieldAttribute : Attribute
     public bool NoStem { get; init; }
     /// <summary>Make a numeric index sortable.</summary>
     public bool Sortable { get; init; }
+    /// <summary>
+    /// Agent-key access tag to map to this field for row-level authorization.
+    /// The field must use a tag index. For example, <c>AccessTag = "tenant_id"</c>.
+    /// </summary>
+    public string? AccessTag { get; init; }
 }
 
 /// <summary>Marks a navigation property as a Context Retriever relationship.</summary>

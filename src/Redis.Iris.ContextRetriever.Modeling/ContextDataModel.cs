@@ -19,7 +19,13 @@ public sealed record ContextEntityDefinition(
     [property: JsonPropertyName("description")] string Description,
     [property: JsonPropertyName("redis_key_template")] string RedisKeyTemplate,
     [property: JsonPropertyName("fields")] IReadOnlyList<ContextFieldDefinition> Fields,
-    [property: JsonPropertyName("relationships")] IReadOnlyList<ContextRelationshipDefinition> Relationships);
+    [property: JsonPropertyName("relationships")] IReadOnlyList<ContextRelationshipDefinition> Relationships,
+    [property: JsonPropertyName("acl_field_mappings")] IReadOnlyList<ContextAclFieldMapping>? AclFieldMappings = null);
+
+/// <summary>Maps a JSON document field to an agent-key access tag for row-level authorization.</summary>
+public sealed record ContextAclFieldMapping(
+    [property: JsonPropertyName("document_field")] string DocumentField,
+    [property: JsonPropertyName("access_tag")] string AccessTag);
 
 /// <summary>An entity field.</summary>
 public sealed record ContextFieldDefinition(

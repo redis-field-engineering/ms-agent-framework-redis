@@ -19,6 +19,8 @@ public sealed class ContextDataModelJsonTests
         var entity = json.RootElement.GetProperty("entities")[0];
         Assert.Equal("customer:{id}", entity.GetProperty("redis_key_template").GetString());
         Assert.Equal("text", entity.GetProperty("fields")[1].GetProperty("redis_indices")[0].GetProperty("type").GetString());
+        Assert.Equal("$.tenant_id", entity.GetProperty("acl_field_mappings")[0].GetProperty("document_field").GetString());
+        Assert.Equal("tenant", entity.GetProperty("acl_field_mappings")[0].GetProperty("access_tag").GetString());
         Assert.Equal(first, ContextDataModelJson.Serialize(ContextDataModelJson.Deserialize(first)));
     }
 
@@ -37,6 +39,7 @@ public sealed class ContextDataModelJsonTests
     {
         var fields = new List<ContextFieldDefinition> { new("id", "str", "", true, []) };
         if (includeName) fields.Add(new("name", "str", "", false, [new("text", Weight: 1)]));
-        return new("Commerce", "", [new("Customer", "", keyTemplate, fields, [])]);
+        fields.Add(new("tenant_id", "str", "", false, [new("tag")]));
+        return new("Commerce", "", [new("Customer", "", keyTemplate, fields, [], [new("$.tenant_id", "tenant")])]);
     }
 }

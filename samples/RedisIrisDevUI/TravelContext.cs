@@ -166,13 +166,13 @@ internal sealed record TravelContextSeed(
 [ContextEntity(KeyTemplate = "traveler:{id}", Description = "A travel agency customer")]
 internal sealed class Traveler
 {
-    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, AccessTag = "tenant_id", Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable traveler ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler authorization boundary")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, AccessTag = "traveler_id", Description = "Traveler authorization boundary")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "full_name", Index = ContextIndex.Text, Description = "Traveler's full name")]
@@ -188,13 +188,13 @@ internal sealed class Traveler
 [ContextEntity(KeyTemplate = "flight-reservation:{id}", Description = "A booked airline itinerary")]
 internal sealed class FlightReservation
 {
-    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, AccessTag = "tenant_id", Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable flight reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, AccessTag = "traveler_id", Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Airline confirmation code")]
@@ -232,13 +232,13 @@ internal sealed class FlightReservation
 [ContextEntity(KeyTemplate = "hotel-reservation:{id}", Description = "A booked hotel stay")]
 internal sealed class HotelReservation
 {
-    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, AccessTag = "tenant_id", Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable hotel reservation ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler who owns the reservation")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, AccessTag = "traveler_id", Description = "Traveler who owns the reservation")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "confirmation_code", Index = ContextIndex.Tag, Description = "Hotel confirmation code")]
@@ -270,13 +270,13 @@ internal sealed class HotelReservation
 [ContextEntity(KeyTemplate = "travel-receipt:{id}", Description = "A receipt for a travel purchase")]
 internal sealed class TravelReceipt
 {
-    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, Description = "Tenant authorization boundary")]
+    [ContextField(Name = "tenant_id", Index = ContextIndex.Tag, AccessTag = "tenant_id", Description = "Tenant authorization boundary")]
     public required string TenantId { get; init; }
 
     [ContextField(Name = "id", IsKeyComponent = true, Description = "Stable receipt ID")]
     public required string Id { get; init; }
 
-    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, Description = "Traveler associated with the purchase")]
+    [ContextField(Name = "traveler_id", Index = ContextIndex.Tag, AccessTag = "traveler_id", Description = "Traveler associated with the purchase")]
     public required string TravelerId { get; init; }
 
     [ContextField(Name = "flight_reservation_id", Index = ContextIndex.Tag, Description = "Related flight reservation, when applicable")]

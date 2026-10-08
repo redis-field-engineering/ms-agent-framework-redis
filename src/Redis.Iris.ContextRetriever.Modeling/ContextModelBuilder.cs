@@ -27,7 +27,7 @@ public sealed class ContextModelBuilder(string title, string description = "")
         var names = definitions.Select(entity => entity.Name).ToArray();
         if (names.Distinct(StringComparer.Ordinal).Count() != names.Length) throw new ContextModelValidationException("Entity names must be unique.");
         foreach (var definition in definitions)
-            ContextModelCompiler.ValidateEntity(definition.Name, definition.RedisKeyTemplate, definition.Fields, definition.Relationships, names);
+            ContextModelCompiler.ValidateEntity(definition.Name, definition.RedisKeyTemplate, definition.Fields, definition.Relationships, names, definition.AclFieldMappings);
         return new(title, description, definitions);
     }
 
@@ -46,6 +46,7 @@ public sealed class ContextModelBuilder(string title, string description = "")
         private string _keyTemplate = typeof(TEntity).GetCustomAttribute<ContextEntityAttribute>()?.KeyTemplate ?? "";
         private readonly Dictionary<string, ContextFieldDefinition> _fields = new(StringComparer.Ordinal);
         private readonly Dictionary<string, ContextRelationshipDefinition> _relationships = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ContextAclFieldMapping> _aclFieldMappings = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Type> _relationshipTargets = new(StringComparer.Ordinal);
 
         internal ContextEntityBuilder()
@@ -55,6 +56,7 @@ public sealed class ContextModelBuilder(string title, string description = "")
                 var annotated = ContextModelCompiler.CompileEntity(typeof(TEntity));
                 foreach (var field in annotated.Fields) _fields[field.Name] = field;
                 foreach (var relationship in annotated.Relationships) _relationships[relationship.Name] = relationship;
+                foreach (var mapping in annotated.AclFieldMappings ?? []) _aclFieldMappings[mapping.DocumentField] = mapping;
                 foreach (var property in typeof(TEntity).GetProperties(BindingFlags.Instance | BindingFlags.Public))
                 {
                     if (property.GetCustomAttribute<ContextRelationshipAttribute>() is { } attribute)
@@ -76,11 +78,16 @@ public sealed class ContextModelBuilder(string title, string description = "")
             var property = GetProperty(selector.Body);
             var existingName = ContextModelCompiler.ExternalName(property, property.GetCustomAttribute<ContextFieldAttribute>()?.Name);
             _fields.TryGetValue(existingName, out var existing);
-            var builder = new ContextFieldBuilder(property, existing);
+            _aclFieldMappings.TryGetValue($"$.{existingName}", out var existingAcl);
+            var builder = new ContextFieldBuilder(property, existing, existingAcl?.AccessTag);
             configure(builder);
             var field = builder.Build();
             if (existing is not null && existing.Name != field.Name) _fields.Remove(existing.Name);
             _fields[field.Name] = field;
+            var oldPath = $"$.{existingName}";
+            var newPath = $"$.{field.Name}";
+            _aclFieldMappings.Remove(oldPath);
+            if (builder.AccessTag is not null) _aclFieldMappings[newPath] = new(newPath, builder.AccessTag);
             return this;
         }
 
@@ -101,7 +108,8 @@ public sealed class ContextModelBuilder(string title, string description = "")
         internal ContextEntityDefinition Build(IReadOnlyDictionary<Type, string> entityNames) => new(_name, _description, _keyTemplate,
             _fields.Values.OrderBy(field => field.Name, StringComparer.Ordinal).ToArray(),
             _relationships.Values.Select(relationship => _relationshipTargets.TryGetValue(relationship.Name, out var target) && entityNames.TryGetValue(target, out var targetName)
-                ? relationship with { Target = targetName } : relationship).OrderBy(relationship => relationship.Name, StringComparer.Ordinal).ToArray());
+                ? relationship with { Target = targetName } : relationship).OrderBy(relationship => relationship.Name, StringComparer.Ordinal).ToArray(),
+            _aclFieldMappings.Values.OrderBy(mapping => mapping.DocumentField, StringComparer.Ordinal).ToArray());
 
         private static PropertyInfo GetProperty(Expression expression)
         {
@@ -127,14 +135,18 @@ public sealed class ContextModelBuilder(string title, string description = "")
         private double _weight = 1;
         private bool _noStem;
         private bool _sortable;
+        private string? _accessTag;
 
-        internal ContextFieldBuilder(PropertyInfo property, ContextFieldDefinition? existing)
+        internal string? AccessTag => _accessTag;
+
+        internal ContextFieldBuilder(PropertyInfo property, ContextFieldDefinition? existing, string? accessTag = null)
         {
             _property = property;
             _name = existing?.Name ?? ContextModelCompiler.ExternalName(property, null);
             _description = existing?.Description ?? "";
             _key = existing?.IsKeyComponent ?? false;
             _allowedValues = existing?.AllowedValues;
+            _accessTag = accessTag;
             var index = existing?.RedisIndices.SingleOrDefault();
             _index = index?.Type switch { "text" => ContextIndex.Text, "tag" => ContextIndex.Tag, "numeric" => ContextIndex.Numeric, "vector" => ContextIndex.Vector, _ => ContextIndex.None };
             if (index is not null)
@@ -155,6 +167,8 @@ public sealed class ContextModelBuilder(string title, string description = "")
         public ContextFieldBuilder Text(double weight = 1, bool noStem = false) { _index = ContextIndex.Text; _weight = weight; _noStem = noStem; return this; }
         /// <summary>Configures a tag index and optional categorical domain.</summary>
         public ContextFieldBuilder Tag(params string[] allowedValues) { _index = ContextIndex.Tag; _allowedValues = allowedValues.Length == 0 ? null : allowedValues; return this; }
+        /// <summary>Maps this tag-indexed field to an agent-key access tag for row-level authorization.</summary>
+        public ContextFieldBuilder AccessControlled(string accessTag) { _accessTag = accessTag; return this; }
         /// <summary>Configures a numeric index.</summary>
         public ContextFieldBuilder Numeric(bool sortable = false) { _index = ContextIndex.Numeric; _sortable = sortable; return this; }
         /// <summary>Configures a vector index.</summary>
@@ -174,6 +188,8 @@ public sealed class ContextModelBuilder(string title, string description = "")
                 _ => throw new ContextModelValidationException($"{_name}: unsupported index."),
             };
             if (_allowedValues is not null && _index != ContextIndex.Tag) throw new ContextModelValidationException($"{_name}: allowed values require a tag index.");
+            if (_accessTag is not null)
+                ContextModelCompiler.ValidateAccessTag(_property.DeclaringType?.Name ?? "Entity", new(_name, ContextModelCompiler.ToDataModelType(_property.PropertyType, _name), _description, _key, index is null ? [] : [index], _allowedValues), _accessTag);
             return new(_name, ContextModelCompiler.ToDataModelType(_property.PropertyType, _name), _description, _key, index is null ? [] : [index], _allowedValues);
         }
     }

@@ -41,6 +41,7 @@ public static partial class ContextModelCompiler
         if (string.IsNullOrWhiteSpace(entity.KeyTemplate)) throw new ContextModelValidationException($"{name}: key template is required.");
 
         var fields = new List<ContextFieldDefinition>();
+        var aclFieldMappings = new List<ContextAclFieldMapping>();
         var relationships = new List<ContextRelationshipDefinition>();
         foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
@@ -48,7 +49,16 @@ public static partial class ContextModelCompiler
             var relationship = property.GetCustomAttribute<ContextRelationshipAttribute>();
             if (field is not null && relationship is not null)
                 throw new ContextModelValidationException($"{name}.{property.Name}: a property cannot be both a field and relationship.");
-            if (field is not null) fields.Add(CompileField(name, property, field));
+            if (field is not null)
+            {
+                var compiledField = CompileField(name, property, field);
+                fields.Add(compiledField);
+                if (field.AccessTag is not null)
+                {
+                    ValidateAccessTag(name, compiledField, field.AccessTag);
+                    aclFieldMappings.Add(new($"$.{compiledField.Name}", field.AccessTag));
+                }
+            }
             if (relationship is not null)
             {
                 var targetName = registeredNames is not null && registeredNames.TryGetValue(relationship.TargetType, out var registered)
@@ -60,7 +70,8 @@ public static partial class ContextModelCompiler
         ValidateEntity(name, entity.KeyTemplate, fields, relationships, registeredNames?.Values);
         return new(name, entity.Description, entity.KeyTemplate,
             fields.OrderBy(field => field.Name, StringComparer.Ordinal).ToArray(),
-            relationships.OrderBy(relationship => relationship.Name, StringComparer.Ordinal).ToArray());
+            relationships.OrderBy(relationship => relationship.Name, StringComparer.Ordinal).ToArray(),
+            aclFieldMappings.OrderBy(mapping => mapping.DocumentField, StringComparer.Ordinal).ToArray());
     }
 
     private static ContextFieldDefinition CompileField(string entityName, PropertyInfo property, ContextFieldAttribute field)
@@ -88,7 +99,8 @@ public static partial class ContextModelCompiler
     }
 
     internal static void ValidateEntity(string name, string keyTemplate, IReadOnlyList<ContextFieldDefinition> fields,
-        IReadOnlyList<ContextRelationshipDefinition> relationships, IEnumerable<string>? registeredEntities = null)
+        IReadOnlyList<ContextRelationshipDefinition> relationships, IEnumerable<string>? registeredEntities = null,
+        IReadOnlyList<ContextAclFieldMapping>? aclFieldMappings = null)
     {
         if (fields.Count == 0) throw new ContextModelValidationException($"{name}: at least one ContextField is required.");
         if (fields.Select(field => field.Name).Distinct(StringComparer.Ordinal).Count() != fields.Count)
@@ -105,6 +117,23 @@ public static partial class ContextModelCompiler
             if (registeredEntities is not null && !registeredEntities.Contains(relationship.Target, StringComparer.Ordinal))
                 throw new ContextModelValidationException($"{name}.{relationship.Name}: target entity '{relationship.Target}' is not registered.");
         }
+        foreach (var mapping in aclFieldMappings ?? [])
+        {
+            const string prefix = "$.";
+            var mappedField = mapping.DocumentField.StartsWith(prefix, StringComparison.Ordinal)
+                ? mapping.DocumentField[prefix.Length..] : mapping.DocumentField;
+            var field = fields.SingleOrDefault(candidate => candidate.Name == mappedField)
+                ?? throw new ContextModelValidationException($"{name}: ACL document field '{mapping.DocumentField}' does not exist.");
+            ValidateAccessTag(name, field, mapping.AccessTag);
+        }
+    }
+
+    internal static void ValidateAccessTag(string entityName, ContextFieldDefinition field, string accessTag)
+    {
+        if (string.IsNullOrWhiteSpace(accessTag) || !AccessTagName().IsMatch(accessTag))
+            throw new ContextModelValidationException($"{entityName}.{field.Name}: access tag must start with a letter and contain only letters, digits, or underscores.");
+        if (!field.RedisIndices.Any(index => index.Type == "tag"))
+            throw new ContextModelValidationException($"{entityName}.{field.Name}: access-controlled fields require a tag index.");
     }
 
     /// <summary>Gets the stable external entity name for a CLR type.</summary>
@@ -128,4 +157,7 @@ public static partial class ContextModelCompiler
 
     [GeneratedRegex("\\{([A-Za-z_][A-Za-z0-9_]*)\\}", RegexOptions.CultureInvariant)]
     private static partial Regex KeyPlaceholder();
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9_]*$", RegexOptions.CultureInvariant)]
+    private static partial Regex AccessTagName();
 }

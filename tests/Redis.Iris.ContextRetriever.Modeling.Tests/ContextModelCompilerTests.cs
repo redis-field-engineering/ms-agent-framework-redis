@@ -16,6 +16,9 @@ public sealed class ContextModelCompilerTests
         Assert.Equal(["email", "id", "name"], customer.Fields.Select(field => field.Name));
         Assert.True(customer.Fields.Single(field => field.Name == "id").IsKeyComponent);
         Assert.Equal("tag", Assert.Single(customer.Fields.Single(field => field.Name == "email").RedisIndices).Type);
+        var acl = Assert.Single(customer.AclFieldMappings!);
+        Assert.Equal("$.email", acl.DocumentField);
+        Assert.Equal("customer_email", acl.AccessTag);
         var relationship = Assert.Single(model.Entities.Single(entity => entity.Name == "Order").Relationships);
         Assert.Equal("Customer", relationship.Target);
         Assert.Equal("customer_id", relationship.SourceField);
@@ -27,6 +30,7 @@ public sealed class ContextModelCompilerTests
         Assert.Throws<ContextModelValidationException>(() => ContextModelCompiler.Compile("bad", "", typeof(BadKey)));
         Assert.Throws<ContextModelValidationException>(() => ContextModelCompiler.Compile("bad", "", typeof(BadVector)));
         Assert.Throws<ContextModelValidationException>(() => ContextModelCompiler.Compile("bad", "", typeof(BadRelationship), typeof(Customer)));
+        Assert.Throws<ContextModelValidationException>(() => ContextModelCompiler.Compile("bad", "", typeof(BadAclIndex)));
     }
 
     [Fact]
@@ -46,7 +50,7 @@ public sealed class ContextModelCompilerTests
         [ContextField(Index = ContextIndex.Text)]
         public required string Name { get; init; }
         [JsonPropertyName("email")]
-        [ContextField(Index = ContextIndex.Tag)]
+        [ContextField(Index = ContextIndex.Tag, AccessTag = "customer_email")]
         public required string EmailAddress { get; init; }
         public string ApplicationOnlySecret { get; init; } = "not exported";
     }
@@ -72,5 +76,11 @@ public sealed class ContextModelCompilerTests
     {
         [ContextField(Name = "id", IsKeyComponent = true)] public string Id { get; init; } = "";
         [ContextRelationship(typeof(Customer), SourceField = "missing")] public Customer? Customer { get; init; }
+    }
+    [ContextEntity(KeyTemplate = "badacl:{id}")]
+    private sealed class BadAclIndex
+    {
+        [ContextField(Name = "id", IsKeyComponent = true)] public string Id { get; init; } = "";
+        [ContextField(Index = ContextIndex.Text, AccessTag = "tenant")] public string Tenant { get; init; } = "";
     }
 }

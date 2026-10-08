@@ -20,7 +20,7 @@ artifact_dir="${CONTEXT_RETRIEVER_ARTIFACT_DIR:-/artifacts}"
 model_path="${artifact_dir}/redis-iris-travel-context-model.json"
 user_profiles_path="${artifact_dir}/redis-iris-travel-user-profiles.json"
 user_credentials_path="${artifact_dir}/redis-iris-travel-users.json"
-update_existing="${CONTEXT_RETRIEVER_UPDATE_EXISTING:-false}"
+update_existing="${CONTEXT_RETRIEVER_UPDATE_EXISTING:-true}"
 
 case "${update_existing}" in
   true|false) ;;
@@ -73,7 +73,7 @@ if [[ "${match_count}" -eq 1 ]]; then
       --datamodel "${model_path}"
   else
     echo "Context Retriever surface '${surface_name}' already exists (${surface_id}); leaving it unchanged."
-    echo "Set CONTEXT_RETRIEVER_UPDATE_EXISTING=true to apply the generated DataModel."
+    echo "Set CONTEXT_RETRIEVER_UPDATE_EXISTING=true to apply the generated DataModel (the default)."
   fi
 else
   create_args=(

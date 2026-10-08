@@ -61,6 +61,8 @@ public static class ContextDataModelComparer
         {
             var before = beforeEntities[name]; var after = afterEntities[name];
             if (before.RedisKeyTemplate != after.RedisKeyTemplate) changes.Add(new(ContextModelChangeKind.Destructive, $"Key template changed: {name}"));
+            if (JsonSerializer.Serialize(before.AclFieldMappings ?? []) != JsonSerializer.Serialize(after.AclFieldMappings ?? []))
+                changes.Add(new(ContextModelChangeKind.Destructive, $"ACL field mappings changed: {name}"));
             var beforeFields = before.Fields.ToDictionary(field => field.Name, StringComparer.Ordinal);
             var afterFields = after.Fields.ToDictionary(field => field.Name, StringComparer.Ordinal);
             foreach (var removed in beforeFields.Keys.Except(afterFields.Keys, StringComparer.Ordinal)) changes.Add(new(ContextModelChangeKind.Destructive, $"Field removed: {name}.{removed}"));
