@@ -30,22 +30,26 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
     public async Task<IContextRetrieverClient> GetAsync(
         ContextRetrieverAccessProfile profile,
         ContextRetrieverCredential credential,
+        ContextRetrieverDelegatedToken? delegatedToken,
         ContextRetrieverClientOptions clientOptions,
         CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         profile.Validate();
         credential.Validate(_timeProvider);
+        delegatedToken?.Validate(_timeProvider);
         if (profile.Endpoint != clientOptions.Endpoint) throw new ArgumentException("Access profile and client endpoint must match.", nameof(clientOptions));
 
         await EvictExpiredAsync().ConfigureAwait(false);
-        var key = new CacheKey(profile.Endpoint, profile.AccessProfileId, credential.Version);
+        var key = new CacheKey(profile.Endpoint, profile.AccessProfileId, credential.Version, delegatedToken?.Version);
         var now = _timeProvider.GetUtcNow();
+        var expiresAt = Min(credential.ExpiresAt, delegatedToken?.ExpiresAt);
         var candidate = new CacheEntry(
             new Lazy<Task<IContextRetrieverClient>>(
-                () => _factory.ConnectAsync(clientOptions, credential.AgentKey, _shutdownToken),
+                () => _factory.ConnectAsync(clientOptions, credential.AgentKey, delegatedToken?.Token, _shutdownToken),
                 LazyThreadSafetyMode.ExecutionAndPublication),
-            now);
+            now,
+            expiresAt);
         var entry = _entries.GetOrAdd(key, candidate);
         var hit = !ReferenceEquals(entry, candidate);
         ContextRetrieverDiagnostics.Cache(hit);
@@ -99,7 +103,8 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
         var cutoff = _timeProvider.GetUtcNow() - _options.IdleLifetime;
         foreach (var pair in _entries)
         {
-            if (pair.Value.LastAccess > cutoff || !_entries.TryRemove(pair)) continue;
+            if (pair.Value.LastAccess > cutoff && (pair.Value.ExpiresAt is null || pair.Value.ExpiresAt > _timeProvider.GetUtcNow())) continue;
+            if (!_entries.TryRemove(pair)) continue;
             await DisposeCompletedAsync(pair.Value).ConfigureAwait(false);
         }
     }
@@ -122,11 +127,15 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
         }
     }
 
-    private sealed record CacheKey(Uri Endpoint, string AccessProfileId, string CredentialVersion);
-    private sealed class CacheEntry(Lazy<Task<IContextRetrieverClient>> client, DateTimeOffset lastAccess)
+    private static DateTimeOffset? Min(DateTimeOffset? first, DateTimeOffset? second) =>
+        first is null ? second : second is null ? first : first < second ? first : second;
+
+    private sealed record CacheKey(Uri Endpoint, string AccessProfileId, string CredentialVersion, string? DelegatedTokenVersion);
+    private sealed class CacheEntry(Lazy<Task<IContextRetrieverClient>> client, DateTimeOffset lastAccess, DateTimeOffset? expiresAt)
     {
         public Lazy<Task<IContextRetrieverClient>> Client { get; } = client;
         public DateTimeOffset LastAccess { get; set; } = lastAccess;
+        public DateTimeOffset? ExpiresAt { get; } = expiresAt;
     }
 }
 

@@ -26,6 +26,14 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
     public async Task<IContextRetrieverClient> ConnectAsync(
         ContextRetrieverClientOptions options,
         string agentKey,
+        CancellationToken cancellationToken = default) =>
+        await ConnectAsync(options, agentKey, delegatedBearerToken: null, cancellationToken).ConfigureAwait(false);
+
+    /// <inheritdoc />
+    public async Task<IContextRetrieverClient> ConnectAsync(
+        ContextRetrieverClientOptions options,
+        string agentKey,
+        string? delegatedBearerToken,
         CancellationToken cancellationToken = default)
     {
         using var connectActivity = ContextRetrieverDiagnostics.Start("connect");
@@ -33,21 +41,27 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         ArgumentNullException.ThrowIfNull(options);
         options.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(agentKey);
+        if (delegatedBearerToken is not null) ArgumentException.ThrowIfNullOrWhiteSpace(delegatedBearerToken);
 
         var endpoint = options.Endpoint;
         var headerValue = string.IsNullOrWhiteSpace(options.AgentKeyScheme)
             ? agentKey
             : $"{options.AgentKeyScheme} {agentKey}";
+        var headers = new Dictionary<string, string>
+        {
+            [options.AgentKeyHeaderName] = headerValue,
+        };
+        if (delegatedBearerToken is not null)
+        {
+            headers["Authorization"] = $"Bearer {delegatedBearerToken}";
+        }
         var transportOptions = new HttpClientTransportOptions
         {
             Endpoint = endpoint,
             Name = "redis-iris-context-retriever",
             TransportMode = HttpTransportMode.StreamableHttp,
             ConnectionTimeout = options.ConnectionTimeout,
-            AdditionalHeaders = new Dictionary<string, string>
-            {
-                [options.AgentKeyHeaderName] = headerValue,
-            },
+            AdditionalHeaders = headers,
             EnableStandaloneGetStream = false,
             MaxReconnectionAttempts = 3,
         };

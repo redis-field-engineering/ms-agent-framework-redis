@@ -59,7 +59,11 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
         var profile = await _accessResolver.ResolveAsync(context, cancellationToken).ConfigureAwait(false);
         var credential = await profile.CredentialProvider.GetCredentialAsync(cancellationToken).ConfigureAwait(false);
         credential.Validate();
-        var client = await _clients.GetAsync(profile, credential, new ContextRetrieverClientOptions
+        var delegatedToken = profile.DelegatedTokenProvider is null
+            ? null
+            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        delegatedToken?.Validate();
+        var client = await _clients.GetAsync(profile, credential, delegatedToken, new ContextRetrieverClientOptions
         {
             Endpoint = profile.Endpoint,
             AgentKeyHeaderName = _options.AgentKeyHeaderName,

@@ -17,4 +17,13 @@ public interface IContextRetrieverClientFactory
         ContextRetrieverClientOptions options,
         string agentKey,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Connects with an agent key and a bearer JWT delegated for the current application principal.</summary>
+    Task<IContextRetrieverClient> ConnectAsync(
+        ContextRetrieverClientOptions options,
+        string agentKey,
+        string? delegatedBearerToken,
+        CancellationToken cancellationToken = default) => delegatedBearerToken is null
+            ? ConnectAsync(options, agentKey, cancellationToken)
+            : throw new NotSupportedException("This Context Retriever client factory does not support delegated bearer tokens.");
 }

@@ -19,6 +19,10 @@ public static class RedisContextRetrieverTools
         profile.Validate();
         var credential = await profile.CredentialProvider.GetCredentialAsync(cancellationToken).ConfigureAwait(false);
         credential.Validate();
+        var delegatedToken = profile.DelegatedTokenProvider is null
+            ? null
+            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        delegatedToken?.Validate();
         var policy = options ?? new();
         var client = await clientFactory.ConnectAsync(new()
         {
@@ -29,7 +33,7 @@ public static class RedisContextRetrieverTools
             DiscoveryTimeout = policy.DiscoveryTimeout,
             ExecutionTimeout = policy.ExecutionTimeout,
             MaximumConcurrentToolExecutions = policy.MaximumConcurrentToolExecutions,
-        }, credential.AgentKey, cancellationToken).ConfigureAwait(false);
+        }, credential.AgentKey, delegatedToken?.Token, cancellationToken).ConfigureAwait(false);
         return new ContextRetrieverToolLease(client);
     }
 }

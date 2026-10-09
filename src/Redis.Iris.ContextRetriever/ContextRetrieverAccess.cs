@@ -25,16 +25,43 @@ public interface IContextRetrieverCredentialProvider
     ValueTask<ContextRetrieverCredential> GetCredentialAsync(CancellationToken cancellationToken = default);
 }
 
+/// <summary>A request-principal token delegated to Context Retriever.</summary>
+/// <param name="Token">Signed JWT issued for the authenticated application principal.</param>
+/// <param name="Version">Non-secret identifier that changes whenever the JWT changes.</param>
+/// <param name="ExpiresAt">JWT expiry used to bound authenticated MCP-session reuse.</param>
+public sealed record ContextRetrieverDelegatedToken(string Token, string Version, DateTimeOffset ExpiresAt)
+{
+    /// <summary>Throws when the token cannot be used.</summary>
+    public void Validate(TimeProvider? timeProvider = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(Token);
+        ArgumentException.ThrowIfNullOrWhiteSpace(Version);
+        if (ExpiresAt <= (timeProvider ?? TimeProvider.System).GetUtcNow())
+        {
+            throw new ContextRetrieverAccessDeniedException("Context Retriever delegated token has expired.");
+        }
+    }
+}
+
+/// <summary>Gets the current user's delegated JWT from trusted application identity state.</summary>
+public interface IContextRetrieverDelegatedTokenProvider
+{
+    /// <summary>Gets a JWT for the current principal; implementations may refresh it between calls.</summary>
+    ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default);
+}
+
 /// <summary>Authorized non-secret access metadata plus its credential source.</summary>
 /// <param name="Endpoint">Authorized local MCP endpoint.</param>
 /// <param name="AccessProfileId">Stable non-secret security-principal identifier.</param>
 /// <param name="CredentialProvider">Trusted credential provider.</param>
 /// <param name="BoundToolArguments">Trusted arguments injected into named tools and hidden from the model.</param>
+/// <param name="DelegatedTokenProvider">Optional request-principal JWT provider. The token is never exposed as a tool argument.</param>
 public sealed record ContextRetrieverAccessProfile(
     Uri Endpoint,
     string AccessProfileId,
     IContextRetrieverCredentialProvider CredentialProvider,
-    IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? BoundToolArguments = null)
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? BoundToolArguments = null,
+    IContextRetrieverDelegatedTokenProvider? DelegatedTokenProvider = null)
 {
     /// <summary>Validates non-secret access metadata.</summary>
     public void Validate()
@@ -47,6 +74,18 @@ public sealed record ContextRetrieverAccessProfile(
             if (string.IsNullOrWhiteSpace(tool)) throw new ContextRetrieverAccessDeniedException("A bound tool name cannot be blank.");
             if (arguments.Keys.Any(string.IsNullOrWhiteSpace)) throw new ContextRetrieverAccessDeniedException($"Bound arguments for '{tool}' cannot have blank names.");
         }
+    }
+}
+
+/// <summary>A fixed delegated-token provider intended for samples and tests.</summary>
+public sealed class FixedContextRetrieverDelegatedTokenProvider(ContextRetrieverDelegatedToken token) : IContextRetrieverDelegatedTokenProvider
+{
+    /// <inheritdoc />
+    public ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        token.Validate();
+        return ValueTask.FromResult(token);
     }
 }
 

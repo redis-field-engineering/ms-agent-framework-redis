@@ -33,6 +33,21 @@ public sealed class ContextRetrieverClientContractTests
     }
 
     [Fact]
+    public async Task DelegatedConnectionSendsAgentKeyAndBearerJwtOnEveryMcpRequest()
+    {
+        var handler = new McpContractHandler();
+        var factory = new ContextRetrieverClientFactory(handlerFactory: () => handler, loggerFactory: null);
+
+        await using var client = await factory.ConnectAsync(s_options, "tenant-agent-key", "signed-user-jwt", CancellationToken.None);
+        await Assert.Single(client.Tools).InvokeAsync(
+            new AIFunctionArguments(new Dictionary<string, object?> { ["name"] = "Ada" }),
+            CancellationToken.None);
+
+        Assert.All(handler.AgentKeyHeaders, value => Assert.Equal("tenant-agent-key", value));
+        Assert.All(handler.AuthorizationHeaders, value => Assert.Equal("Bearer signed-user-jwt", value));
+    }
+
+    [Fact]
     public async Task CancellationInterruptsInitialization()
     {
         var handler = new McpContractHandler { BlockInitialize = true };
