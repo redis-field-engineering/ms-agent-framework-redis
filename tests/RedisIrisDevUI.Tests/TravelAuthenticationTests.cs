@@ -1,7 +1,9 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -17,6 +19,32 @@ public sealed class TravelAuthenticationTests
         Assert.Equal(TravelAuthenticationMode.Token, TravelAuthentication.ParseMode(null));
         Assert.Equal(TravelAuthenticationMode.Token, TravelAuthentication.ParseMode("token"));
         Assert.Equal(TravelAuthenticationMode.OpenIdConnect, TravelAuthentication.ParseMode("oidc"));
+    }
+
+    [Fact]
+    public void AccessTokenInspectorReturnsExactTokenAndDecodedJson()
+    {
+        var header = WebEncoders.Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new { alg = "RS256", kid = "key-1" }));
+        var payload = WebEncoders.Base64UrlEncode(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            aud = "https://redis-iris-context-retriever",
+            tenant_id = "redis-travel-demo",
+            traveler_id = "traveler-001",
+        }));
+        var token = $"{header}.{payload}.signature";
+
+        var inspected = TravelAuthentication.InspectAccessToken(token);
+
+        Assert.Equal(token, inspected.Token);
+        Assert.Equal("RS256", inspected.Header.GetProperty("alg").GetString());
+        Assert.Equal("https://redis-iris-context-retriever", inspected.Claims.GetProperty("aud").GetString());
+        Assert.Equal("traveler-001", inspected.Claims.GetProperty("traveler_id").GetString());
+    }
+
+    [Fact]
+    public void AccessTokenInspectorRejectsMalformedToken()
+    {
+        Assert.Throws<FormatException>(() => TravelAuthentication.InspectAccessToken("not-a-jwt"));
     }
 
     [Fact]

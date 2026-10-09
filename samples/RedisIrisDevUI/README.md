@@ -125,6 +125,7 @@ DEVUI_OIDC_AUDIENCE="https://redis-iris-context-retriever"
 DEVUI_OIDC_CONTEXT_SCOPE="https://redis-iris-context-retriever/context.read"
 DEVUI_OIDC_LOGOUT_ENDPOINT="https://<domain-prefix>.auth.us-east-1.amazoncognito.com/logout"
 DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI="http://localhost:5080/"
+DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR="false"
 REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY="<tenant-scoped-agent-key>"
 REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="<tenant-agent-id-or-rotation-version>"
 ```
@@ -139,6 +140,8 @@ docker compose -f compose.yaml -f compose.jwt.yaml up --detach --build
 ```
 
 The overlay reads non-secret OIDC values from Terraform state and the tenant agent key from `artifacts/context-retriever-jwt/redis-iris-travel-tenant-agent.json`; it writes `.env.jwt.local` with mode `0600`. Run ordinary `docker compose up --detach --build` to return to the default local-token configuration.
+
+The generated JWT demo overlay enables the development-only `/debug/jwt` route. It requires the authenticated session cookie and returns the exact delegated bearer token together with its decoded header and claims. Responses are marked `no-store`. Disable `DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR` after inspection, and never enable this route in a production application.
 
 OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
 

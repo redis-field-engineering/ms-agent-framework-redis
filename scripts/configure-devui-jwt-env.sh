@@ -19,6 +19,7 @@ output_tmp="$(mktemp "${output_path}.XXXXXX")"
 trap 'rm -f "${output_tmp}"' EXIT
 
 jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"${oidc_environment}" > "${output_tmp}"
+printf 'DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR=true\n' >> "${output_tmp}"
 printf 'REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY=%s\n' "${agent_key}" >> "${output_tmp}"
 printf 'REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION=%s\n' "${credential_version}" >> "${output_tmp}"
 chmod 0600 "${output_tmp}"

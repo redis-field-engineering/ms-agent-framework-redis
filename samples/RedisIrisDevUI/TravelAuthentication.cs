@@ -2,8 +2,10 @@
 
 using System.Collections.Concurrent;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace RedisIrisDevUI;
 
@@ -24,6 +26,28 @@ internal static class TravelAuthentication
         "oidc" => TravelAuthenticationMode.OpenIdConnect,
         _ => throw new InvalidOperationException("DEVUI_AUTH_MODE must be token or oidc."),
     };
+
+    public static InspectedAccessToken InspectAccessToken(string accessToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
+        var segments = accessToken.Split('.');
+        if (segments.Length != 3)
+        {
+            throw new FormatException("The access token is not a three-segment JSON Web Token.");
+        }
+
+        try
+        {
+            return new InspectedAccessToken(
+                accessToken,
+                JsonSerializer.Deserialize<JsonElement>(WebEncoders.Base64UrlDecode(segments[0])),
+                JsonSerializer.Deserialize<JsonElement>(WebEncoders.Base64UrlDecode(segments[1])));
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException)
+        {
+            throw new FormatException("The access token header or payload is not valid base64url JSON.", exception);
+        }
+    }
 
     public static void ApplyValidatedAccessTokenClaims(
         ClaimsPrincipal principal,
@@ -75,6 +99,8 @@ internal static class TravelAuthentication
         identity.AddClaim(new Claim(type, value));
     }
 }
+
+internal sealed record InspectedAccessToken(string Token, JsonElement Header, JsonElement Claims);
 
 /// <summary>
 /// Keeps authentication tickets, including raw OAuth tokens, in this process. The browser cookie contains only
