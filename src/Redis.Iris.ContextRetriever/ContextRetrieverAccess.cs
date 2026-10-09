@@ -56,12 +56,14 @@ public interface IContextRetrieverDelegatedTokenProvider
 /// <param name="CredentialProvider">Trusted credential provider.</param>
 /// <param name="BoundToolArguments">Trusted arguments injected into named tools and hidden from the model.</param>
 /// <param name="DelegatedTokenProvider">Optional request-principal JWT provider. The token is never exposed as a tool argument.</param>
+/// <param name="BoundFilterValues">Trusted values that replace matching model-supplied tag-condition values before execution.</param>
 public sealed record ContextRetrieverAccessProfile(
     Uri Endpoint,
     string AccessProfileId,
     IContextRetrieverCredentialProvider CredentialProvider,
     IReadOnlyDictionary<string, IReadOnlyDictionary<string, object?>>? BoundToolArguments = null,
-    IContextRetrieverDelegatedTokenProvider? DelegatedTokenProvider = null)
+    IContextRetrieverDelegatedTokenProvider? DelegatedTokenProvider = null,
+    IReadOnlyDictionary<string, object?>? BoundFilterValues = null)
 {
     /// <summary>Validates non-secret access metadata.</summary>
     public void Validate()
@@ -74,6 +76,8 @@ public sealed record ContextRetrieverAccessProfile(
             if (string.IsNullOrWhiteSpace(tool)) throw new ContextRetrieverAccessDeniedException("A bound tool name cannot be blank.");
             if (arguments.Keys.Any(string.IsNullOrWhiteSpace)) throw new ContextRetrieverAccessDeniedException($"Bound arguments for '{tool}' cannot have blank names.");
         }
+        if ((BoundFilterValues ?? new Dictionary<string, object?>()).Keys.Any(string.IsNullOrWhiteSpace))
+            throw new ContextRetrieverAccessDeniedException("A bound filter field cannot be blank.");
     }
 }
 

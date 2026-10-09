@@ -70,13 +70,15 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
         }, cancellationToken).ConfigureAwait(false);
 
         var boundArguments = profile.BoundToolArguments ?? new Dictionary<string, IReadOnlyDictionary<string, object?>>();
+        var boundFilterValues = profile.BoundFilterValues ?? new Dictionary<string, object?>();
         return new AIContext
         {
-            Tools = boundArguments.Count == 0
+            Tools = boundArguments.Count == 0 && boundFilterValues.Count == 0
                 ? client.Tools
                 : client.Tools.Select(tool => (AIFunction)new AuthorizationBoundaryAIFunction(
                     tool,
-                    boundArguments.TryGetValue(tool.Name, out var arguments) ? arguments : null)).ToArray(),
+                    boundArguments.TryGetValue(tool.Name, out var arguments) ? arguments : null,
+                    boundFilterValues)).ToArray(),
         };
     }
 
@@ -87,21 +89,24 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
     {
         private readonly AIFunction _inner;
         private readonly IReadOnlyDictionary<string, object?> _boundArguments;
+        private readonly IReadOnlyDictionary<string, object?> _boundFilterValues;
         private readonly JsonElement _jsonSchema;
 
         public AuthorizationBoundaryAIFunction(
             AIFunction inner,
-            IReadOnlyDictionary<string, object?>? boundArguments)
+            IReadOnlyDictionary<string, object?>? boundArguments,
+            IReadOnlyDictionary<string, object?> boundFilterValues)
         {
             _inner = inner;
             _boundArguments = boundArguments ?? new Dictionary<string, object?>();
+            _boundFilterValues = boundFilterValues;
             _jsonSchema = RewriteSchema(inner.JsonSchema, _boundArguments.Keys);
         }
 
         public override string Name => _inner.Name;
-        public override string Description => _boundArguments.Count == 0
-            ? _inner.Description
-            : _inner.Description + " Authorized identity arguments are supplied automatically; do not provide them.";
+        public override string Description => _inner.Description +
+            (_boundArguments.Count == 0 ? "" : " Authorized identity arguments are supplied automatically; do not provide them.") +
+            (_boundFilterValues.Count == 0 ? "" : $" Identity filter values are canonicalized by the application for: {string.Join(", ", _boundFilterValues.Keys)}.");
         public override JsonElement JsonSchema => _jsonSchema;
         public override JsonElement? ReturnJsonSchema => _inner.ReturnJsonSchema;
         public override JsonSerializerOptions JsonSerializerOptions => _inner.JsonSerializerOptions;
@@ -109,10 +114,26 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
 
         protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
         {
-            if (_boundArguments.Count == 0) return _inner.InvokeAsync(arguments, cancellationToken);
+            if (_boundArguments.Count == 0 && _boundFilterValues.Count == 0)
+                return _inner.InvokeAsync(arguments, cancellationToken);
 
             var effectiveArguments = arguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             foreach (var (name, boundValue) in _boundArguments) effectiveArguments[name] = boundValue;
+            if (_boundFilterValues.Count != 0 &&
+                effectiveArguments.TryGetValue("tag_conditions", out var suppliedConditions) &&
+                suppliedConditions is not null &&
+                JsonNode.Parse(JsonSerializer.Serialize(suppliedConditions, _inner.JsonSerializerOptions)) is JsonArray conditions)
+            {
+                foreach (var condition in conditions.OfType<JsonObject>())
+                {
+                    if (condition["field"]?.GetValue<string>() is { } field &&
+                        _boundFilterValues.TryGetValue(field, out var trustedValue))
+                    {
+                        condition["value"] = JsonSerializer.SerializeToNode(trustedValue, _inner.JsonSerializerOptions);
+                    }
+                }
+                effectiveArguments["tag_conditions"] = JsonSerializer.SerializeToElement(conditions, _inner.JsonSerializerOptions);
+            }
             return _inner.InvokeAsync(new AIFunctionArguments(effectiveArguments), cancellationToken);
         }
 

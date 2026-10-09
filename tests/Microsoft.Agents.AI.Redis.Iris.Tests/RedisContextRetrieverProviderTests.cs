@@ -71,9 +71,13 @@ public sealed class RedisContextRetrieverProviderTests
         var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
             ValueTask.FromResult(new ContextRetrieverAccessProfile(
                 new Uri("https://context.example.test/mcp"), "traveler-a",
-                new FixedContextRetrieverCredentialProvider(new("secret", "v1")))));
+                new FixedContextRetrieverCredentialProvider(new("secret", "v1")),
+                BoundFilterValues: new Dictionary<string, object?>
+                {
+                    ["traveler_id"] = "traveler-001",
+                })));
         var inner = AIFunctionFactory.Create(
-            (IEnumerable<TagCondition> tag_conditions) => tag_conditions.Count(),
+            (IEnumerable<TagCondition> tag_conditions) => string.Join(",", tag_conditions.Select(condition => $"{condition.Field}={condition.Value}")),
             "filter_traveler");
         await using var cache = new ContextRetrieverClientCache(new FixedToolFactory(inner));
         var provider = new RedisContextRetrieverProvider(resolver, cache);
@@ -83,9 +87,13 @@ public sealed class RedisContextRetrieverProviderTests
 
         var filtered = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["tag_conditions"] = new[] { new TagCondition("traveler_id", "traveler-001") },
+            ["tag_conditions"] = new[]
+            {
+                new TagCondition("traveler_id", "traveler001"),
+                new TagCondition("status", "confirmed"),
+            },
         });
-        Assert.Equal("1", (await tool.InvokeAsync(filtered))?.ToString());
+        Assert.Equal("traveler_id=traveler-001,status=confirmed", (await tool.InvokeAsync(filtered))?.ToString());
     }
 
     [Fact]
