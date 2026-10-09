@@ -169,8 +169,10 @@ resource "terraform_data" "context_retriever_idp" {
         --jwks-uri 'https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.this.id}/.well-known/jwks.json' \
         --audience '${var.context_retriever_audience}' \
         --user-claim 'sub' \
-        --access-tag-claims '{"tenant_id":"tenant_id","traveler_id":"traveler_id"}' \
-        --require-user-token
+        --claim-mapping 'tenant_id=tenant_id' \
+        --claim-mapping 'traveler_id=traveler_id' \
+        --require-token
+      ctxctl surface idp test '${var.context_retriever_surface_id}'
     EOT
   }
 }

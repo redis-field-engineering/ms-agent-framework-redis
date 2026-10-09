@@ -4,6 +4,8 @@ This Terraform example provisions the identity-provider side of Context Retrieve
 
 Surface IdP/JWKS configuration is currently a preview capability that is not exposed in the Redis Cloud UI or documented as a stable public admin API. By default Terraform only emits the required configuration. After the Context Retriever team confirms that it is enabled for the target service, set `configure_context_retriever_idp = true`, provide the surface ID, and authenticate `ctxctl` before applying. The optional `terraform_data` resource then configures the surface with the Cognito issuer.
 
+The example is tested against `redis-context-retriever==0.0.6`. Install that version of `ctxctl` on the machine running Terraform (for example, `pipx install redis-context-retriever==0.0.6`) and authenticate it against the Context Retriever control plane before enabling the optional resource. After configuration, Terraform runs `ctxctl surface idp test` to verify JWKS connectivity.
+
 ## Deploy
 
 ```bash
