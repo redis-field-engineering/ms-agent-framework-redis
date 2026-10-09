@@ -131,7 +131,7 @@ Jaeger stores and visualizes traces. Metrics travel over the same OTLP connectio
 The runner loads the existing Redis Cloud and OpenAI settings from `.env.local`. Optional settings are:
 
 ```dotenv
-OPENAI_MODEL="gpt-4.1-mini"
+OPENAI_MODEL="gpt-4.1"
 SAMPLE_OWNER_ID="redis-iris-devui-shopper"
 REDIS_IRIS_SHORT_TERM_WINDOW="4"
 REDIS_IRIS_DEMO_TELEMETRY="false"

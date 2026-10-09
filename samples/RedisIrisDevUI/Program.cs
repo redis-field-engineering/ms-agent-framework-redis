@@ -54,7 +54,7 @@ var openAiApiKey = Required(builder.Configuration, "OPENAI_API_KEY");
 var contextRetrieverEndpoint = Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT");
 var contextRetrieverCredentialVersion = builder.Configuration["REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION"] ?? "environment-v1";
 var ownerId = builder.Configuration["SAMPLE_OWNER_ID"] ?? "redis-iris-devui-shopper";
-var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
+var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 var travelContextModel = TravelContext.Model;
@@ -105,6 +105,7 @@ builder.Services.AddSingleton(userDirectory);
 builder.Services.AddSingleton<IHttpContextAccessor>(httpContextAccessor);
 builder.Services.AddSingleton(userAccessor);
 builder.Services.AddSingleton<AgentIsolationKeyProvider, TravelAgentIsolationKeyProvider>();
+builder.Services.AddSingleton<TravelIdentityContextProvider>();
 builder.Services.AddSingleton(identityResolver);
 builder.Services.AddSingleton(travelContextModel);
 builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
@@ -172,6 +173,7 @@ builder.AddAIAgent(AgentName, (services, name) =>
         ChatHistoryProvider = services.GetRequiredService<RedisIrisChatHistoryProvider>(),
         AIContextProviders =
         [
+            services.GetRequiredService<TravelIdentityContextProvider>(),
             services.GetRequiredService<RedisIrisMemoryProvider>(),
             services.GetRequiredService<RedisContextRetrieverProvider>(),
         ],
