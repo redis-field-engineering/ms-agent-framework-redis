@@ -7,3 +7,8 @@ artifacts/
 *.user
 *.suo
 .DS_Store
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
