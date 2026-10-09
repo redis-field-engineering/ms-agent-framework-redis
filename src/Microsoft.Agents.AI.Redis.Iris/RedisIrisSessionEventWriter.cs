@@ -55,7 +55,11 @@ public sealed class RedisIrisSessionEventWriter
         foreach (var message in messages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var request = this._mapper.ToSessionEventRequest(message, state.SessionId, state.ActorId, state.AgentId);
+            // RAM derives the session owner from the USER event actor and does not expose a
+            // separate owner field on AddSessionEventRequest. Keep the storage owner on the
+            // wire; RedisIrisChatHistoryProvider projects the canonical actor before loaded
+            // history is supplied to the model.
+            var request = this._mapper.ToSessionEventRequest(message, state.SessionId, state.OwnerId, state.AgentId);
             if (request is null)
             {
                 continue;

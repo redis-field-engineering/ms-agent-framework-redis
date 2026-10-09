@@ -37,7 +37,7 @@ public sealed class RedisIrisSessionEventWriterTests
     }
 
     [Fact]
-    public async Task UserEventsUseCanonicalActorInsteadOfStorageOwner()
+    public async Task UserEventsUseStorageOwnerRequiredByRamSessionContract()
     {
         var client = new RecordingClient();
         var writer = new RedisIrisSessionEventWriter(client, RedisIrisEventWriter.ChatHistoryProvider);
@@ -45,7 +45,8 @@ public sealed class RedisIrisSessionEventWriterTests
 
         await writer.WriteAsync(RedisIrisEventWriter.ChatHistoryProvider, [new(ChatRole.User, "hello")], state);
 
-        Assert.Equal("traveler-001", Assert.Single(client.Added).ActorId);
+        Assert.Equal("17-tenant-12-traveler-001", Assert.Single(client.Added).ActorId);
+        Assert.Equal("traveler-001", state.ActorId);
     }
 
     private sealed class RecordingClient : IRedisAgentMemoryClient

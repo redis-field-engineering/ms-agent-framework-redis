@@ -26,7 +26,7 @@ public sealed class RedisIrisProviderState
     /// <summary>Gets the authorized memory owner identifier.</summary>
     public string OwnerId { get; }
 
-    /// <summary>Gets the user actor identifier written to session events. This is distinct from the storage owner.</summary>
+    /// <summary>Gets the canonical user actor identifier exposed to application and model-facing history. This is distinct from the storage owner.</summary>
     public string ActorId { get; }
 
     /// <summary>Gets the stable agent actor identifier.</summary>
