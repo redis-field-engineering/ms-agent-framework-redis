@@ -132,8 +132,25 @@ resource "aws_cognito_user_pool_client" "application" {
 }
 
 resource "aws_cognito_user_pool_domain" "this" {
-  domain       = var.name_prefix
-  user_pool_id = aws_cognito_user_pool.this.id
+  domain                = var.name_prefix
+  user_pool_id          = aws_cognito_user_pool.this.id
+  managed_login_version = 2
+}
+
+resource "aws_cognito_managed_login_branding" "application" {
+  user_pool_id                = aws_cognito_user_pool.this.id
+  client_id                   = aws_cognito_user_pool_client.application.id
+  use_cognito_provided_values = true
+
+  depends_on = [aws_cognito_user_pool_domain.this]
+}
+
+resource "random_password" "demo" {
+  for_each = toset(keys(nonsensitive(var.demo_users)))
+
+  length           = 24
+  special          = true
+  override_special = "!#$%&*+-.:=?@^_"
 }
 
 resource "aws_cognito_user" "demo" {
@@ -141,14 +158,14 @@ resource "aws_cognito_user" "demo" {
 
   user_pool_id       = aws_cognito_user_pool.this.id
   username           = var.demo_users[each.key].email
-  temporary_password = var.demo_users[each.key].temporary_password
+  temporary_password = coalesce(var.demo_users[each.key].temporary_password, random_password.demo[each.key].result)
   message_action     = "SUPPRESS"
 
   attributes = {
-    email                = var.demo_users[each.key].email
-    email_verified       = "true"
-    "custom:tenant_id"   = var.demo_users[each.key].tenant_id
-    "custom:traveler_id" = var.demo_users[each.key].traveler_id
+    email          = var.demo_users[each.key].email
+    email_verified = "true"
+    tenant_id      = var.demo_users[each.key].tenant_id
+    traveler_id    = var.demo_users[each.key].traveler_id
   }
 }
 

@@ -4,6 +4,7 @@ TestResults/
 artifacts/
 .env
 .env.local
+.env.*.local
 *.user
 *.suo
 .DS_Store

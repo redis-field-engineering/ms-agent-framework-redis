@@ -297,6 +297,12 @@ if (authenticationRequired)
                         }).ConfigureAwait(false);
                         if (!validation.IsValid || validation.ClaimsIdentity is null)
                         {
+                            context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                                .CreateLogger("RedisIrisDevUI.Oidc")
+                                .LogWarning(
+                                    validation.Exception,
+                                    "Rejected the Cognito access token during signature, issuer, audience, or lifetime validation: {ValidationError}",
+                                    validation.Exception?.Message ?? "No validation exception was provided.");
                             context.Fail("Cognito returned an invalid Context Retriever access token.");
                             return;
                         }

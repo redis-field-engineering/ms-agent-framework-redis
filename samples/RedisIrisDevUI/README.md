@@ -53,6 +53,8 @@ docker compose --profile context-retriever run --rm --build context-provisioner
 
 The generated artifact is written to `artifacts/context-retriever/redis-iris-travel-context-model.json`. If exactly one surface with that name exists, its DataModel is updated by default so security mappings cannot remain stale. Set `CONTEXT_RETRIEVER_UPDATE_EXISTING=false` only when intentionally generating artifacts without applying them; duplicate names fail safely instead of selecting an arbitrary surface.
 
+`CONTEXT_RETRIEVER_CREDENTIAL_MODE` controls credential creation. Its default, `local-users`, creates one traveler-scoped key per local demo user. Use `none` to create or update only the surface. Use `tenant-jwt` for the delegated-JWT test: it creates one tenant-scoped key, writes it to the ignored `redis-iris-travel-tenant-agent.json` artifact with mode `0600`, and relies on the delegated JWT's `traveler_id` claim for the narrower user boundary.
+
 The administrative URL/key above are control-plane credentials. Do not use the regional runtime URL ending in `/mcp` as `CONTEXT_RETRIEVER_ADMIN_URL`. The DevUI's runtime Context Retriever provider separately needs that MCP endpoint and a least-privilege agent key. The Redis connection identifies the data source from which the managed surface generates its tools.
 
 ## Seed the synthetic travel context
@@ -128,6 +130,15 @@ REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="<tenant-agent-id-or-rotation-ve
 ```
 
 Compose passes these values through its existing `.env.local` file; no Compose changes are required. Open <http://localhost:5080/login> and authenticate with a provisioned Cognito demo user. The application uses authorization code + PKCE, validates the access token independently of the ID token, and obtains the exact `tenant_id` and `traveler_id` from that validated access token. It sends the tenant agent key as `X-API-Key` and the access token as `Authorization: Bearer` when proxying MCP calls. Neither credential is exposed to the model.
+
+For a side-by-side local configuration that does not change the default `.env.local` token mode, provision the JWT surface with `CONTEXT_RETRIEVER_CREDENTIAL_MODE=tenant-jwt`, deploy the Terraform, and generate the ignored environment overlay:
+
+```bash
+./scripts/configure-devui-jwt-env.sh
+docker compose -f compose.yaml -f compose.jwt.yaml up --detach --build
+```
+
+The overlay reads non-secret OIDC values from Terraform state and the tenant agent key from `artifacts/context-retriever-jwt/redis-iris-travel-tenant-agent.json`; it writes `.env.jwt.local` with mode `0600`. Run ordinary `docker compose up --detach --build` to return to the default local-token configuration.
 
 OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
 

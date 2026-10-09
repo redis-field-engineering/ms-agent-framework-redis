@@ -39,11 +39,11 @@ variable "context_retriever_audience" {
 }
 
 variable "demo_users" {
-  description = "Optional demo users. Temporary passwords are sensitive and remain in Terraform state; omit users for production."
+  description = "Optional demo users. Omit temporary_password to generate one; all passwords are sensitive and remain in Terraform state."
   sensitive   = true
   type = map(object({
     email              = string
-    temporary_password = string
+    temporary_password = optional(string)
     tenant_id          = string
     traveler_id        = string
   }))

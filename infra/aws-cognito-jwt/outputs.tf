@@ -54,3 +54,16 @@ output "devui_oidc_environment" {
     DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI = var.logout_urls[0]
   }
 }
+
+output "demo_user_credentials" {
+  description = "Demo-only Cognito usernames and temporary passwords. Read with terraform output -json demo_user_credentials."
+  sensitive   = true
+  value = {
+    for key, user in var.demo_users : key => {
+      username           = user.email
+      temporary_password = coalesce(user.temporary_password, random_password.demo[key].result)
+      tenant_id          = user.tenant_id
+      traveler_id        = user.traveler_id
+    }
+  }
+}

@@ -18,7 +18,7 @@ terraform apply
 
 No AWS resources are created until `terraform apply`. The optional `ctxctl` step relies on the CLI's existing admin credential store; no Redis admin key is placed in Terraform configuration or state.
 
-Use a unique `name_prefix`; Cognito hosted-domain prefixes are globally unique within an AWS partition. Store Terraform state in an encrypted remote backend before using real users. `demo_users` temporary passwords are intentionally marked sensitive but still exist in state, so omit those resources in production and connect Cognito to the application's normal identity lifecycle.
+Use a unique `name_prefix`; Cognito hosted-domain prefixes are globally unique within an AWS partition. Store Terraform state in an encrypted remote backend before using real users. Terraform generates a strong temporary password when a `demo_users` entry omits `temporary_password`; supplied or generated passwords are intentionally marked sensitive but still exist in state. Read the test credentials locally with `terraform output -json demo_user_credentials`. Omit these users in production and connect Cognito to the application's normal identity lifecycle.
 
 ## Authorization flow
 
@@ -56,7 +56,7 @@ The live test must prove that the delegated traveler token can only narrow the t
 
 - Cognito user pool using the Essentials tier, required for V2 access-token customization
 - Public authorization-code application client
-- Hosted Cognito login domain
+- Hosted Cognito managed-login v2 domain and default app-client branding
 - Context Retriever resource server and `context.read` scope
 - V2 pre-token-generation Lambda and least-privilege invocation permission
 - Optional demo users with trusted tenant/traveler attributes

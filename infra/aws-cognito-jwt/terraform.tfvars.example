@@ -12,15 +12,13 @@ context_retriever_surface_id    = ""
 # Demo only. These temporary passwords are stored in Terraform state.
 demo_users = {
   avery = {
-    email              = "avery@example.com"
-    temporary_password = "replace-with-a-strong-temporary-password"
-    tenant_id          = "redis-travel-demo"
-    traveler_id        = "traveler-001"
+    email       = "avery@example.com"
+    tenant_id   = "redis-travel-demo"
+    traveler_id = "traveler-001"
   }
   blake = {
-    email              = "blake@example.com"
-    temporary_password = "replace-with-a-different-strong-temporary-password"
-    tenant_id          = "redis-travel-demo"
-    traveler_id        = "traveler-002"
+    email       = "blake@example.com"
+    tenant_id   = "redis-travel-demo"
+    traveler_id = "traveler-002"
   }
 }

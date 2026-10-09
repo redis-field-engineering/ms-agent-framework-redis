@@ -20,13 +20,23 @@ artifact_dir="${CONTEXT_RETRIEVER_ARTIFACT_DIR:-/artifacts}"
 model_path="${artifact_dir}/redis-iris-travel-context-model.json"
 user_profiles_path="${artifact_dir}/redis-iris-travel-user-profiles.json"
 user_credentials_path="${artifact_dir}/redis-iris-travel-users.json"
+tenant_credentials_path="${artifact_dir}/redis-iris-travel-tenant-agent.json"
 delegated_tokens_path="${CONTEXT_RETRIEVER_DELEGATED_TOKENS_FILE:-${artifact_dir}/redis-iris-travel-delegated-tokens.json}"
 update_existing="${CONTEXT_RETRIEVER_UPDATE_EXISTING:-true}"
+credential_mode="${CONTEXT_RETRIEVER_CREDENTIAL_MODE:-local-users}"
 
 case "${update_existing}" in
   true|false) ;;
   *)
     echo "CONTEXT_RETRIEVER_UPDATE_EXISTING must be true or false." >&2
+    exit 2
+    ;;
+esac
+
+case "${credential_mode}" in
+  local-users|tenant-jwt|none) ;;
+  *)
+    echo "CONTEXT_RETRIEVER_CREDENTIAL_MODE must be local-users, tenant-jwt, or none." >&2
     exit 2
     ;;
 esac
@@ -104,6 +114,70 @@ else
   create_output="$(ctxctl --no-color --output json surface create "${create_args[@]}")"
   surface_id="$(jq -er '.id' <<<"${create_output}")"
   jq 'del(.redis_password, .credentials)' <<<"${create_output}"
+fi
+
+if [[ "${credential_mode}" == "none" ]]; then
+  echo "Context Retriever surface '${surface_name}' is ready (${surface_id}); credential provisioning was skipped."
+  exit 0
+fi
+
+if [[ "${credential_mode}" == "tenant-jwt" ]]; then
+  if [[ -f "${tenant_credentials_path}" ]]; then
+    if jq -e --arg surface_id "${surface_id}" '
+        .surfaceId == $surface_id and
+        (.tenantId | type == "string" and length > 0) and
+        (.contextRetrieverAgentKey | startswith("cs_agent_")) and
+        (.contextRetrieverCredentialVersion | type == "string" and length > 0)
+      ' "${tenant_credentials_path}" >/dev/null; then
+      echo "Tenant Context Retriever credential already exists; reusing it."
+      exit 0
+    fi
+    echo "Existing tenant credential bundle does not match surface '${surface_name}'." >&2
+    exit 1
+  fi
+
+  agent_list_output="$(ctxctl --no-color --output json agent list --surface-id "${surface_id}" --page-size 100)"
+  if jq -e 'type == "array"' >/dev/null 2>&1 <<<"${agent_list_output}"; then
+    existing_agents="${agent_list_output}"
+  elif [[ "${agent_list_output}" == *"No agent"*"found"* ]]; then
+    existing_agents='[]'
+  else
+    echo "ctxctl returned an unexpected agent-list response." >&2
+    exit 1
+  fi
+
+  tenant_id="$(jq -er 'map(.tenant_id) | unique | if length == 1 then .[0] else error("profiles span multiple tenants") end' "${user_profiles_path}")"
+  agent_name="redis-iris-devui-${tenant_id}-jwt"
+  if [[ "$(jq --arg name "${agent_name}" '[.[] | select(.name == $name)] | length' <<<"${existing_agents}")" -ne 0 ]]; then
+    echo "Tenant agent '${agent_name}' already exists but its key is not in ${tenant_credentials_path}." >&2
+    echo "Delete or rotate that agent explicitly before regenerating the local credential bundle." >&2
+    exit 1
+  fi
+
+  access_tags="$(jq -cn --arg tenant "${tenant_id}" '{tenant_id: [$tenant]}')"
+  agent_output="$(ctxctl --no-color --output json agent create \
+    --surface-id "${surface_id}" \
+    --name "${agent_name}" \
+    --description "DevUI tenant credential for delegated JWT authorization in ${tenant_id}" \
+    --access-tags "${access_tags}")"
+  agent_key="$(jq -er '.key | select(startswith("cs_agent_"))' <<<"${agent_output}")"
+  credential_version="$(jq -er '.id' <<<"${agent_output}")"
+  credentials_tmp="$(mktemp "${artifact_dir}/redis-iris-travel-tenant-agent.XXXXXX")"
+  trap 'rm -f "${credentials_tmp}"' EXIT
+  jq -cn \
+    --arg surface_id "${surface_id}" \
+    --arg surface_name "${surface_name}" \
+    --arg tenant_id "${tenant_id}" \
+    --arg agent_key "${agent_key}" \
+    --arg credential_version "${credential_version}" \
+    '{surfaceId:$surface_id, surfaceName:$surface_name, tenantId:$tenant_id,
+      contextRetrieverAgentKey:$agent_key,
+      contextRetrieverCredentialVersion:$credential_version}' > "${credentials_tmp}"
+  chmod 0600 "${credentials_tmp}"
+  mv "${credentials_tmp}" "${tenant_credentials_path}"
+  trap - EXIT
+  echo "Wrote the tenant-scoped JWT test credential to ${tenant_credentials_path} (mode 0600)."
+  exit 0
 fi
 
 if [[ ! -f "${delegated_tokens_path}" ]]; then

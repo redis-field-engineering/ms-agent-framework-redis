@@ -1,0 +1,7 @@
+services:
+  devui:
+    env_file:
+      - path: .env.local
+        required: true
+      - path: .env.jwt.local
+        required: true
