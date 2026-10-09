@@ -15,14 +15,14 @@ public sealed class ManagedContextRetrieverLiveTests
 
     [ContextLiveFact]
     [Trait("Category", "Live")]
-    public async Task TenantWideQueriesRemainIsolatedByScopedAgentKey()
+    public async Task TenantKeyAndDelegatedJwtRemainIsolatedByTraveler()
     {
         var configuration = ContextLiveConfiguration.Load();
         Assert.True(configuration.Users.Count >= 2, "At least two scoped users are required.");
 
         foreach (var user in configuration.Users)
         {
-            await using var client = await configuration.ConnectAsync(user.AgentKey);
+            await using var client = await configuration.ConnectAsync(user);
             var typed = new ContextRetrieverTypedClient(client, TestModel.Model);
             var page = await typed.InvokeAsync<TravelerPage>("filter_traveler", new Dictionary<string, object?>
             {
@@ -45,7 +45,7 @@ public sealed class ManagedContextRetrieverLiveTests
         var configuration = ContextLiveConfiguration.Load();
         var first = configuration.Users[0];
         var second = configuration.Users[1];
-        await using var client = await configuration.ConnectAsync(first.AgentKey);
+        await using var client = await configuration.ConnectAsync(first);
         var typed = new ContextRetrieverTypedClient(client, TestModel.Model);
 
         var own = await typed.GetByIdAsync<TravelerRecord>(first.TravelerId);
@@ -67,11 +67,12 @@ public sealed class ManagedContextRetrieverLiveTests
             return ValueTask.FromResult(new ContextRetrieverAccessProfile(
                 configuration.Endpoint,
                 $"live:{user.TenantId}:{user.TravelerId}",
-                new FixedContextRetrieverCredentialProvider(new(user.AgentKey, user.CredentialVersion)),
+                new FixedContextRetrieverCredentialProvider(new(configuration.AgentKey, configuration.CredentialVersion)),
                 new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal)
                 {
                     ["get_traveler_by_id"] = new Dictionary<string, object?> { ["id"] = user.TravelerId },
-                }));
+                },
+                new FixedContextRetrieverDelegatedTokenProvider(new(user.DelegatedToken, user.DelegatedTokenVersion, user.DelegatedTokenExpiresAt))));
         });
         await using var cache = new ContextRetrieverClientCache(new ContextRetrieverClientFactory());
         var provider = new RedisContextRetrieverProvider(resolver, cache, new RedisContextRetrieverOptions
@@ -146,24 +147,38 @@ internal static class TestModel
     public static ContextDataModel Model { get; } = ContextModelCompiler.Compile("Live travel model", "", typeof(TravelerRecord));
 }
 
-internal sealed record ContextLiveUser(string TenantId, string TravelerId, string AgentKey, string CredentialVersion);
+internal sealed record ContextLiveUser(
+    string TenantId,
+    string TravelerId,
+    string DelegatedToken,
+    string DelegatedTokenVersion,
+    DateTimeOffset DelegatedTokenExpiresAt);
 
-internal sealed record ContextLiveConfiguration(Uri Endpoint, IReadOnlyList<ContextLiveUser> Users)
+internal sealed record ContextLiveConfiguration(
+    Uri Endpoint,
+    string AgentKey,
+    string CredentialVersion,
+    IReadOnlyList<ContextLiveUser> Users)
 {
     public static ContextLiveConfiguration Load()
     {
         var path = ContextLiveFactAttribute.ResolveUsersFile();
         using var document = JsonDocument.Parse(File.ReadAllText(path));
-        var users = document.RootElement.EnumerateArray().Select(item => new ContextLiveUser(
+        var users = document.RootElement.GetProperty("users").EnumerateArray().Select(item => new ContextLiveUser(
             item.GetProperty("tenantId").GetString()!,
             item.GetProperty("travelerId").GetString()!,
-            item.GetProperty("contextRetrieverAgentKey").GetString()!,
-            item.GetProperty("contextRetrieverCredentialVersion").GetString()!)).ToArray();
-        return new(new Uri(Environment.GetEnvironmentVariable("REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT")!), users);
+            item.GetProperty("contextRetrieverDelegatedToken").GetString()!,
+            item.GetProperty("contextRetrieverDelegatedTokenVersion").GetString()!,
+            item.GetProperty("contextRetrieverDelegatedTokenExpiresAt").GetDateTimeOffset())).ToArray();
+        return new(
+            new Uri(Environment.GetEnvironmentVariable("REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT")!),
+            document.RootElement.GetProperty("contextRetrieverAgentKey").GetString()!,
+            document.RootElement.GetProperty("contextRetrieverCredentialVersion").GetString()!,
+            users);
     }
 
-    public Task<IContextRetrieverClient> ConnectAsync(string agentKey) => new ContextRetrieverClientFactory().ConnectAsync(
-        new ContextRetrieverClientOptions { Endpoint = Endpoint }, agentKey);
+    public Task<IContextRetrieverClient> ConnectAsync(ContextLiveUser user) => new ContextRetrieverClientFactory().ConnectAsync(
+        new ContextRetrieverClientOptions { Endpoint = Endpoint }, AgentKey, user.DelegatedToken);
 }
 
 internal sealed class ContextLiveFactAttribute : FactAttribute

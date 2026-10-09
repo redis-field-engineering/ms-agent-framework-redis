@@ -44,6 +44,10 @@ public sealed class ContextRetrieverAccessResolverTests
         source.Cancel();
         var valid = new FixedContextRetrieverCredentialProvider(new("secret", "v2"));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => valid.GetCredentialAsync(source.Token).AsTask());
+
+        var expiredToken = new FixedContextRetrieverDelegatedTokenProvider(
+            new("jwt", "jwt-v1", DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => expiredToken.GetTokenAsync().AsTask());
     }
 
     private static ContextRetrieverAccessProfile Profile(string id) => new(

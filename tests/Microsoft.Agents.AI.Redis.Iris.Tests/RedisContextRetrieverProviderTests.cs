@@ -33,6 +33,27 @@ public sealed class RedisContextRetrieverProviderTests
     }
 
     [Fact]
+    public async Task DelegatedTokenIsResolvedServerSideAndNeverAddedToAgentState()
+    {
+        var factory = new DelegatedTokenFactory();
+        var resolver = new DelegateContextRetrieverAccessResolver((_, _) => ValueTask.FromResult(
+            new ContextRetrieverAccessProfile(
+                new Uri("https://context.example.test/mcp"),
+                "tenant:user",
+                new FixedContextRetrieverCredentialProvider(new("tenant-key", "key-v1")),
+                DelegatedTokenProvider: new FixedContextRetrieverDelegatedTokenProvider(new(
+                    "signed-user-jwt", "jwt-v1", DateTimeOffset.UtcNow.AddHours(1))))));
+        await using var cache = new ContextRetrieverClientCache(factory);
+        var provider = new RedisContextRetrieverProvider(resolver, cache);
+
+        await provider.InvokingAsync(new(s_agent, null, new()));
+
+        Assert.Equal("tenant-key", factory.AgentKey);
+        Assert.Equal("signed-user-jwt", factory.DelegatedToken);
+        Assert.Empty(provider.StateKeys);
+    }
+
+    [Fact]
     public async Task AuthorizationAndDiscoveryFailuresFailClosed()
     {
         var denied = new DelegateContextRetrieverAccessResolver((_, _) =>
@@ -117,6 +138,22 @@ public sealed class RedisContextRetrieverProviderTests
     {
         public IReadOnlyList<AIFunction> Tools => tools;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class DelegatedTokenFactory : IContextRetrieverClientFactory
+    {
+        public string? AgentKey { get; private set; }
+        public string? DelegatedToken { get; private set; }
+
+        public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Delegated overload expected.");
+
+        public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, string? delegatedBearerToken, CancellationToken cancellationToken = default)
+        {
+            AgentKey = agentKey;
+            DelegatedToken = delegatedBearerToken;
+            return Task.FromResult<IContextRetrieverClient>(new Client([]));
+        }
     }
 
     private sealed class FixedToolFactory(AIFunction tool) : IContextRetrieverClientFactory

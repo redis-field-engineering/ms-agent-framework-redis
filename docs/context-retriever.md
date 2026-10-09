@@ -1,6 +1,6 @@
 # Redis Context Retriever for Microsoft Agent Framework
 
-Use `RedisContextRetrieverProvider` for most applications. Its access resolver runs for every invocation, so the current trusted application identity selects a server-enforced agent-key scope. Credentials are never read from model tool arguments or stored in Agent Framework session state.
+Use `RedisContextRetrieverProvider` for most applications. Its access resolver runs for every invocation, so trusted application identity can select a tenant-scoped agent key and a delegated end-user JWT. Credentials are never read from model tool arguments, exposed to the model, or stored in Agent Framework session state.
 
 The fixed helper is only appropriate when every caller may share one service identity and its complete Context Retriever authorization scope. Keep the returned `ContextRetrieverToolLease` alive for as long as its tools are attached.
 
@@ -10,7 +10,9 @@ Keep the shared `RedisContextRetrieverOptions` and client factory/cache. Replace
 
 ## Security and rotation
 
-Create least-privilege agent keys whose server-side access tags expose only the entities required by that application role. The connector does not recreate or broaden server authorization with client-side filters. Rotate by returning the new key and a new non-secret credential version from `IContextRetrieverCredentialProvider`; this forces a separate MCP session and tool discovery result.
+Create least-privilege agent keys whose server-side access tags expose only the tenant and entities required by that application role. For end-user applications, attach an `IContextRetrieverDelegatedTokenProvider` to the resolved profile. The connector sends the tenant key as `X-API-Key` and the current user's signed JWT as `Authorization: Bearer`; Context Retriever maps trusted JWT claims to access tags and intersects them with the agent-key boundary. The application, not the model, obtains or mints this token through its configured identity provider.
+
+Rotate an agent key by returning a new key and non-secret version from `IContextRetrieverCredentialProvider`. Refresh a user token by returning a new token and version from `IContextRetrieverDelegatedTokenProvider`. Both changes establish a separate MCP session. Delegated-token expiry is mandatory and bounds cached-session lifetime, even when the configured idle lifetime is longer. Never use the JWT itself as its version or access-profile ID.
 
 Production endpoints must use HTTPS. Plain HTTP is accepted only for loopback development. Automatic redirects and ambient HTTP cookies are disabled so credentials cannot be forwarded to another origin. Endpoint, profile, and credential selection come exclusively from trusted resolver code; model-generated tool arguments can neither select a tenant nor supply a key. Tool results remain untrusted data and must not be treated as instructions.
 

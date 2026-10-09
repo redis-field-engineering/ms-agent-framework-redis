@@ -61,19 +61,21 @@ var travelContextModel = TravelContext.Model;
 var userDirectory = TravelUserDirectory.Load(
     builder.Configuration["DEVUI_USERS_FILE"],
     builder.Configuration["DEVUI_USERS_JSON"]);
-var contextRetrieverAgentKey = userDirectory.IsMultiUser
-    ? null
-    : Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY");
+var contextRetrieverCredential = userDirectory.AgentCredential ?? new ContextRetrieverCredential(
+    Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY"),
+    contextRetrieverCredentialVersion);
 var legacyUser = new TravelUser(
     Subject: ownerId,
     DisplayName: ownerId,
     TenantId: "redis-iris-devui",
     TravelerId: ownerId,
     SignInToken: "legacy-single-user-mode",
-    ContextRetrieverAgentKey: contextRetrieverAgentKey ?? "unused-in-multi-user-mode",
-    ContextRetrieverCredentialVersion: contextRetrieverCredentialVersion);
+    ContextRetrieverDelegatedToken: null,
+    ContextRetrieverDelegatedTokenVersion: null,
+    ContextRetrieverDelegatedTokenExpiresAt: null);
 var httpContextAccessor = new HttpContextAccessor();
 var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser);
+var delegatedTokenProvider = new TravelDelegatedTokenProvider(userAccessor);
 var identityResolver = new RamIdentityResolver(userAccessor);
 
 if (!string.IsNullOrWhiteSpace(otlpEndpoint))
@@ -109,16 +111,15 @@ builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
         return ValueTask.FromResult(new ContextRetrieverAccessProfile(
             new Uri(contextRetrieverEndpoint),
             $"travel:{user.IsolationKey}",
-            new FixedContextRetrieverCredentialProvider(new(
-                user.ContextRetrieverAgentKey,
-                user.ContextRetrieverCredentialVersion)),
+            new FixedContextRetrieverCredentialProvider(contextRetrieverCredential),
             new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal)
             {
                 ["get_traveler_by_id"] = new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
                     ["id"] = user.TravelerId,
                 },
-            }));
+            },
+            userDirectory.IsMultiUser ? delegatedTokenProvider : null));
     }));
 builder.Services.AddSingleton<IContextRetrieverClientFactory>(services =>
     new ContextRetrieverClientFactory(services.GetRequiredService<ILoggerFactory>()));
@@ -445,7 +446,7 @@ static string LoginPage(string? error = null) => $$"""
     <head><meta charset="utf-8"><title>Redis Iris DevUI sign in</title></head>
     <body style="font-family:system-ui;max-width:520px;margin:5rem auto;padding:0 1rem;line-height:1.5">
       <h1>Redis Iris DevUI</h1>
-      <p>Enter a configured development-user token. The token selects a server-owned tenant, traveler, RAM owner, session partition, and Context Retriever agent key.</p>
+      <p>Enter a configured development-user token. The token selects a server-owned tenant, traveler, RAM owner, session partition, and delegated Context Retriever identity.</p>
       {{(error is null ? "" : $"<p style=\"color:#b91c1c\">{System.Net.WebUtility.HtmlEncode(error)}</p>")}}
       <form method="post" action="/login">
         <label>Sign-in token<br><input name="token" type="password" autocomplete="current-password" required style="width:100%;padding:.6rem;margin:.4rem 0 1rem"></label>

@@ -2,7 +2,7 @@
 
 This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat, owner-scoped RAM inspection and cleanup endpoints, and an annotated structured-context model for a travel agency.
 
-The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. It supports an optional multi-user demonstration mode that partitions sessions, RAM, and Context Retriever credentials by a trusted composite tenant/traveler identity. The store remains process-local; production hosting should use its normal identity provider and durable session storage.
+The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. It supports an optional multi-user demonstration mode that partitions sessions, RAM, and Context Retriever access by a trusted composite tenant/traveler identity. The store remains process-local; production hosting should use its normal identity provider and durable session storage.
 
 ## Run
 
@@ -67,11 +67,11 @@ The seeder generates `artifacts/context-retriever/redis-iris-travel-context-seed
 
 Context Retriever access tags must use the same `tenant_id` and `traveler_id` names. The POCOs declare `AccessTag` on both fields, causing the generated surface model to mark them for server-side ACL filtering; an ordinary TAG index or a model-supplied filter alone is not an authorization boundary.
 
-The DevUI also configures `AuthorizationOwnedFilterFields` for `tenant_id` and `traveler_id`. Those fields are removed from model-visible tag-condition enums and rejected if a caller nevertheless supplies them. Its trusted access resolver binds `get_traveler_by_id.id` to the authenticated user's domain traveler ID; that argument is removed from the model-visible schema and injected immediately before execution. The scoped agent key remains the source of Context Retriever authorization identity, while the separate composite RAM owner ID is never accepted as a Context Retriever entity identifier.
+The DevUI also configures `AuthorizationOwnedFilterFields` for `tenant_id` and `traveler_id`. Those fields are removed from model-visible tag-condition enums and rejected if a caller nevertheless supplies them. Its trusted access resolver binds `get_traveler_by_id.id` to the authenticated user's domain traveler ID; that argument is removed from the model-visible schema and injected immediately before execution. A tenant-scoped agent key sets the outer boundary and a delegated JWT narrows it to the authenticated traveler. The separate composite RAM owner ID is never accepted as a Context Retriever entity identifier.
 
 The records are synthetic demonstration data. Production applications should ingest authoritative records through an appropriately authenticated system-of-record workflow rather than ship the admin key with the application.
 
-Add the surface's runtime credentials to `.env.local` before starting DevUI:
+Single-user mode can use the surface's runtime credential directly from `.env.local`:
 
 ```dotenv
 REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT="https://your-context-retriever-mcp-endpoint/mcp"
@@ -79,11 +79,30 @@ REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY="cs_agent_..."
 REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="environment-v1"
 ```
 
-The agent key must belong to the provisioned travel surface and should carry only the access tags needed by this sample. The optional non-secret credential version lets a rotated key establish a fresh cached MCP session. The admin key is not passed to the DevUI connector.
+The agent key must belong to the provisioned travel surface. The optional non-secret credential version lets a rotated key establish a fresh cached MCP session. The admin key is not passed to the DevUI connector.
 
 ## Demonstrate multi-user isolation
 
-The one-shot `context-provisioner` owns the demo credential lifecycle. In addition to creating or updating the surface, it reads the sample's trusted traveler profiles, mints one Context Retriever agent key per traveler with both `tenant_id` and `traveler_id` access tags, generates independent high-entropy DevUI sign-in tokens, and writes the complete runtime bundle to the ignored `artifacts/context-retriever/redis-iris-travel-users.json` file with mode `0600`. Agent keys and sign-in tokens are never printed.
+The one-shot `context-provisioner` creates one agent key limited to the demo tenant. Traveler isolation comes from delegated JWTs issued by an identity provider trusted by the Context Retriever surface. Before provisioning, create the ignored `artifacts/context-retriever/redis-iris-travel-delegated-tokens.json` file:
+
+```json
+[
+  {
+    "subject": "avery",
+    "token": "signed JWT carrying the mapped tenant_id and traveler_id claims",
+    "version": "the token jti or another non-secret rotation identifier",
+    "expiresAt": "2026-10-09T22:00:00Z"
+  },
+  {
+    "subject": "blake",
+    "token": "signed JWT carrying the mapped tenant_id and traveler_id claims",
+    "version": "another non-secret rotation identifier",
+    "expiresAt": "2026-10-09T22:00:00Z"
+  }
+]
+```
+
+The subjects must match those emitted by `--print-context-users`. Tokens must still be valid when the DevUI starts. The sample accepts pre-issued tokens because it cannot impersonate your production identity provider; a production implementation supplies a refreshing `IContextRetrieverDelegatedTokenProvider` backed by its normal OIDC/OAuth token service. Configure the surface's JWT/JWKS claim mapping so the signed claims map to the `tenant_id` and `traveler_id` access tags before running this demo. This security model requires a Context Retriever deployment that intersects JWT-derived tags with agent-key tags per access dimension; the live isolation tests deliberately fail if the deployment broadens or overrides either boundary.
 
 Run the provisioner before starting DevUI:
 
@@ -92,16 +111,18 @@ docker compose --profile context-retriever run --rm context-provisioner
 docker compose up --build -d devui
 ```
 
-The DevUI container mounts that bundle read-only and enables multi-user mode automatically. To retrieve a local sign-in token, inspect the ignored credential file directly; do not commit or share it. Provisioning is idempotent while that file is retained. Because the control plane only returns a full agent key at creation time, deleting the local bundle requires explicitly deleting or rotating the corresponding managed agents before generating a replacement.
+If you have an older array-shaped bundle created by the per-traveler-agent version of this sample, remove that ignored local bundle before the first run of the new provisioner. The old managed agents are no longer used and can be deleted separately after the new tenant agent is verified.
+
+The provisioner combines the tenant key, delegated JWT metadata, and newly generated independent DevUI sign-in tokens in `artifacts/context-retriever/redis-iris-travel-users.json` with mode `0600`. The DevUI container mounts that bundle read-only and enables multi-user mode automatically. To retrieve a local sign-in token, inspect the ignored credential file directly; do not commit or share it. Replace expired JWTs in the delegated-token input file and rerun the provisioner; it preserves the tenant key and local sign-in tokens while refreshing only the delegated tokens. Because the control plane only returns a full agent key at creation time, deleting the runtime bundle requires explicitly deleting or rotating the corresponding managed tenant agent before generating a replacement.
 
 When this setting contains at least two users, the sample enables cookie authentication and Agent Framework session isolation. Open `/login`, enter one user’s local token, and then use DevUI normally. The authenticated server-side mapping supplies all of the following; none are accepted from model tool arguments:
 
 - Agent Framework isolation key: `tenant_id:traveler_id`
 - RAM tenant and actor identity, with a storage-safe length-prefixed owner derived from `tenant_id` and `traveler_id`
-- Context Retriever access-profile ID and scoped agent key
+- Context Retriever access-profile ID and delegated user JWT; the tenant agent key remains server-side
 - Filtering for the `/api/context/examples` inspection endpoint
 
-Sign out before testing the second traveler. The two provisioned Context Retriever keys are distinct; using a shared key would defeat server-side traveler isolation. In production, replace this local bootstrap bundle with OIDC/JWT plus a dedicated credential broker or secret store while retaining the same claim-to-scope mapping. Runtime application instances should never receive Context Retriever administrative credentials.
+Sign out before testing the second traveler. Both users deliberately share the tenant agent key, while Context Retriever intersects that boundary with the current user's JWT-derived traveler scope. The JWT is attached by the connector and is never a model-visible tool argument. Runtime application instances should never receive Context Retriever administrative credentials.
 
 ## Run the Docker observability demo
 

@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI.Hosting;
+using Redis.Iris.ContextRetriever;
 
 namespace RedisIrisDevUI;
 
@@ -14,14 +15,20 @@ internal sealed record TravelUser(
     string TenantId,
     string TravelerId,
     string SignInToken,
-    string ContextRetrieverAgentKey,
-    string ContextRetrieverCredentialVersion)
+    string? ContextRetrieverDelegatedToken,
+    string? ContextRetrieverDelegatedTokenVersion,
+    DateTimeOffset? ContextRetrieverDelegatedTokenExpiresAt)
 {
     public string IsolationKey => $"{TenantId}:{TravelerId}";
 
     // RAM owner IDs use a storage-safe, unambiguous length-prefixed composite.
     public string RamOwnerId => $"{TenantId.Length}-{TenantId}-{TravelerId.Length}-{TravelerId}";
 }
+
+internal sealed record TravelSecurityBundle(
+    string ContextRetrieverAgentKey,
+    string ContextRetrieverCredentialVersion,
+    IReadOnlyList<TravelUser> Users);
 
 internal sealed record TravelUserProvisioningProfile(
     string Subject,
@@ -35,7 +42,13 @@ internal sealed class TravelUserDirectory
     internal const string TravelerClaim = "traveler_id";
     private readonly IReadOnlyList<TravelUser> _users;
 
-    private TravelUserDirectory(IReadOnlyList<TravelUser> users) => _users = users;
+    public ContextRetrieverCredential? AgentCredential { get; }
+
+    private TravelUserDirectory(IReadOnlyList<TravelUser> users, ContextRetrieverCredential? agentCredential = null)
+    {
+        _users = users;
+        AgentCredential = agentCredential;
+    }
 
     public bool IsMultiUser => _users.Count > 0;
 
@@ -43,8 +56,9 @@ internal sealed class TravelUserDirectory
     {
         if (string.IsNullOrWhiteSpace(json)) return new([]);
 
-        var users = JsonSerializer.Deserialize<List<TravelUser>>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))
-            ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain a JSON array.");
+        var bundle = JsonSerializer.Deserialize<TravelSecurityBundle>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain a tenant credential bundle.");
+        var users = bundle.Users ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain users.");
         if (users.Count < 2)
         {
             throw new InvalidOperationException("DEVUI_USERS_JSON must contain at least two users for multi-user mode.");
@@ -54,22 +68,33 @@ internal sealed class TravelUserDirectory
         {
             if (string.IsNullOrWhiteSpace(user.Subject) || string.IsNullOrWhiteSpace(user.DisplayName) ||
                 string.IsNullOrWhiteSpace(user.TenantId) || string.IsNullOrWhiteSpace(user.TravelerId) ||
-                string.IsNullOrWhiteSpace(user.SignInToken) || string.IsNullOrWhiteSpace(user.ContextRetrieverAgentKey) ||
-                string.IsNullOrWhiteSpace(user.ContextRetrieverCredentialVersion))
+                string.IsNullOrWhiteSpace(user.SignInToken) || string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken) ||
+                string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedTokenVersion) ||
+                user.ContextRetrieverDelegatedTokenExpiresAt is null)
             {
                 throw new InvalidOperationException("Every DEVUI_USERS_JSON user field is required.");
             }
+
+            new ContextRetrieverDelegatedToken(
+                user.ContextRetrieverDelegatedToken,
+                user.ContextRetrieverDelegatedTokenVersion,
+                user.ContextRetrieverDelegatedTokenExpiresAt.Value).Validate();
         }
 
         if (users.Select(static user => user.Subject).Distinct(StringComparer.Ordinal).Count() != users.Count ||
-            users.Select(static user => user.IsolationKey).Distinct(StringComparer.Ordinal).Count() != users.Count ||
-            users.Select(static user => user.ContextRetrieverAgentKey).Distinct(StringComparer.Ordinal).Count() != users.Count)
+            users.Select(static user => user.IsolationKey).Distinct(StringComparer.Ordinal).Count() != users.Count)
         {
             throw new InvalidOperationException(
-                "DEVUI_USERS_JSON subjects, tenant/traveler boundaries, and scoped Context Retriever agent keys must be unique.");
+                "DEVUI_USERS_JSON subjects and tenant/traveler boundaries must be unique.");
+        }
+        if (users.Select(static user => user.TenantId).Distinct(StringComparer.Ordinal).Count() != 1)
+        {
+            throw new InvalidOperationException("A DevUI tenant credential bundle cannot span multiple tenants.");
         }
 
-        return new(users);
+        var credential = new ContextRetrieverCredential(bundle.ContextRetrieverAgentKey, bundle.ContextRetrieverCredentialVersion);
+        credential.Validate();
+        return new(users, credential);
     }
 
     public static TravelUserDirectory Load(string? path, string? json)
@@ -117,6 +142,24 @@ internal sealed class TravelUserDirectory
             new Claim(TravelerClaim, user.TravelerId),
         };
         return new(new ClaimsIdentity(claims, authenticationType));
+    }
+}
+
+internal sealed class TravelDelegatedTokenProvider(TravelUserAccessor users) : IContextRetrieverDelegatedTokenProvider
+{
+    public ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var user = users.Current;
+        var token = new ContextRetrieverDelegatedToken(
+            user.ContextRetrieverDelegatedToken
+                ?? throw new ContextRetrieverAccessDeniedException("No delegated Context Retriever token is available for this user."),
+            user.ContextRetrieverDelegatedTokenVersion
+                ?? throw new ContextRetrieverAccessDeniedException("No delegated Context Retriever token version is available for this user."),
+            user.ContextRetrieverDelegatedTokenExpiresAt
+                ?? throw new ContextRetrieverAccessDeniedException("No delegated Context Retriever token expiry is available for this user."));
+        token.Validate();
+        return ValueTask.FromResult(token);
     }
 }
 
