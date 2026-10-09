@@ -6,9 +6,13 @@
     <PackageReference Include="Microsoft.Agents.AI.DevUI" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting.OpenAI" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <ProjectReference Include="../../src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RedisIrisDevUI.Tests" />
   </ItemGroup>
 </Project>

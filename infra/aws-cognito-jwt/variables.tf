@@ -20,6 +20,11 @@ variable "logout_urls" {
   description = "Exact post-logout URLs allowed for the deployed application."
   type        = list(string)
   default     = ["http://localhost:5080/"]
+
+  validation {
+    condition     = length(var.logout_urls) > 0
+    error_message = "At least one logout URL is required for the DevUI OIDC configuration."
+  }
 }
 
 variable "context_retriever_audience" {

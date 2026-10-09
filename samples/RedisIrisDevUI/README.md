@@ -105,6 +105,32 @@ When this setting contains at least two users, the sample enables cookie authent
 
 Sign out before testing the second traveler. The provisioned keys are distinct and carry different `traveler_id` access tags. For a deployable delegated-JWT example backed by Cognito, see [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md). Runtime application instances should never receive Context Retriever administrative credentials.
 
+## Optional Cognito delegated-JWT mode
+
+The development sign-in-token flow above remains the default. To exercise real delegated JWT authorization instead, deploy [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md), configure the Context Retriever surface to trust the emitted issuer/JWKS/audience, and add the following non-secret Terraform outputs to `.env.local`:
+
+```bash
+terraform -chdir=infra/aws-cognito-jwt output -json devui_oidc_environment
+```
+
+The corresponding environment names are:
+
+```dotenv
+DEVUI_AUTH_MODE="oidc"
+DEVUI_OIDC_AUTHORITY="https://cognito-idp.us-east-1.amazonaws.com/<user-pool-id>"
+DEVUI_OIDC_CLIENT_ID="<public-application-client-id>"
+DEVUI_OIDC_AUDIENCE="https://redis-iris-context-retriever"
+DEVUI_OIDC_CONTEXT_SCOPE="https://redis-iris-context-retriever/context.read"
+DEVUI_OIDC_LOGOUT_ENDPOINT="https://<domain-prefix>.auth.us-east-1.amazoncognito.com/logout"
+DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI="http://localhost:5080/"
+REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY="<tenant-scoped-agent-key>"
+REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION="<tenant-agent-id-or-rotation-version>"
+```
+
+Compose passes these values through its existing `.env.local` file; no Compose changes are required. Open <http://localhost:5080/login> and authenticate with a provisioned Cognito demo user. The application uses authorization code + PKCE, validates the access token independently of the ID token, and obtains the exact `tenant_id` and `traveler_id` from that validated access token. It sends the tenant agent key as `X-API-Key` and the access token as `Authorization: Bearer` when proxying MCP calls. Neither credential is exposed to the model.
+
+OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
+
 ## Run the Docker observability demo
 
 The repository-level Compose stack builds the DevUI and exports connector metrics and traces over OTLP to a local OpenTelemetry Collector:

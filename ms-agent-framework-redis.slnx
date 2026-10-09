@@ -9,6 +9,7 @@
     <Project Path="tests/Redis.Iris.ContextRetriever.Modeling.Tests/Redis.Iris.ContextRetriever.Modeling.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.Tests/Redis.Iris.ContextRetriever.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.LiveTests/Redis.Iris.ContextRetriever.LiveTests.csproj" />
+    <Project Path="tests/RedisIrisDevUI.Tests/RedisIrisDevUI.Tests.csproj" />
     <Project Path="tests/Redis.Iris.AgentMemory.Tests/Redis.Iris.AgentMemory.Tests.csproj" />
     <Project Path="tests/Microsoft.Agents.AI.Redis.Iris.Tests/Microsoft.Agents.AI.Redis.Iris.Tests.csproj" />
     <Project Path="tests/Redis.Iris.AgentMemory.LiveTests/Redis.Iris.AgentMemory.LiveTests.csproj" />

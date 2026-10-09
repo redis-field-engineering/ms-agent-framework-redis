@@ -41,3 +41,16 @@ output "context_retriever_idp_configuration" {
     require_user_token = true
   }
 }
+
+output "devui_oidc_environment" {
+  description = "Non-secret settings that opt the DevUI sample into this Cognito user pool."
+  value = {
+    DEVUI_AUTH_MODE                     = "oidc"
+    DEVUI_OIDC_AUTHORITY                = local.issuer
+    DEVUI_OIDC_CLIENT_ID                = aws_cognito_user_pool_client.application.id
+    DEVUI_OIDC_AUDIENCE                 = var.context_retriever_audience
+    DEVUI_OIDC_CONTEXT_SCOPE            = "${var.context_retriever_audience}/context.read"
+    DEVUI_OIDC_LOGOUT_ENDPOINT          = "https://${aws_cognito_user_pool_domain.this.domain}.auth.${var.aws_region}.amazoncognito.com/logout"
+    DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI = var.logout_urls[0]
+  }
+}

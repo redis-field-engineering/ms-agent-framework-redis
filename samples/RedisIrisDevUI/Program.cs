@@ -9,7 +9,10 @@ using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Redis.Iris;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.AI;
+using Microsoft.IdentityModel.Tokens;
 using OpenAI;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -58,10 +61,41 @@ var model = builder.Configuration["OPENAI_MODEL"] ?? "gpt-4.1-mini";
 var shortTermWindow = ParsePositiveInt(builder.Configuration, "REDIS_IRIS_SHORT_TERM_WINDOW", 4);
 var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 var travelContextModel = TravelContext.Model;
-var userDirectory = TravelUserDirectory.Load(
-    builder.Configuration["DEVUI_USERS_FILE"],
-    builder.Configuration["DEVUI_USERS_JSON"]);
-var contextRetrieverCredential = userDirectory.AgentCredential ?? (userDirectory.IsMultiUser
+var authenticationMode = TravelAuthentication.ParseMode(builder.Configuration["DEVUI_AUTH_MODE"]);
+var oidcEnabled = authenticationMode == TravelAuthenticationMode.OpenIdConnect;
+var userDirectory = oidcEnabled
+    ? TravelUserDirectory.Parse(null)
+    : TravelUserDirectory.Load(
+        builder.Configuration["DEVUI_USERS_FILE"],
+        builder.Configuration["DEVUI_USERS_JSON"]);
+var authenticationRequired = oidcEnabled || userDirectory.IsMultiUser;
+var oidcAuthority = oidcEnabled ? Required(builder.Configuration, "DEVUI_OIDC_AUTHORITY").TrimEnd('/') : null;
+var oidcClientId = oidcEnabled ? Required(builder.Configuration, "DEVUI_OIDC_CLIENT_ID") : null;
+var oidcAudience = oidcEnabled ? Required(builder.Configuration, "DEVUI_OIDC_AUDIENCE") : null;
+var oidcLogoutEndpoint = oidcEnabled ? Required(builder.Configuration, "DEVUI_OIDC_LOGOUT_ENDPOINT") : null;
+var oidcPostLogoutRedirectUri = oidcEnabled ? Required(builder.Configuration, "DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI") : null;
+var oidcContextScope = oidcEnabled
+    ? builder.Configuration["DEVUI_OIDC_CONTEXT_SCOPE"] ?? $"{oidcAudience!.TrimEnd('/')}/context.read"
+    : null;
+if (oidcEnabled && (!Uri.TryCreate(oidcAuthority, UriKind.Absolute, out var authorityUri) ||
+    authorityUri.Scheme != Uri.UriSchemeHttps))
+{
+    throw new InvalidOperationException("DEVUI_OIDC_AUTHORITY must be an absolute HTTPS URI.");
+}
+if (oidcEnabled && (!Uri.TryCreate(oidcLogoutEndpoint, UriKind.Absolute, out var logoutUri) ||
+    logoutUri.Scheme != Uri.UriSchemeHttps))
+{
+    throw new InvalidOperationException("DEVUI_OIDC_LOGOUT_ENDPOINT must be an absolute HTTPS URI.");
+}
+if (oidcEnabled && !Uri.TryCreate(oidcPostLogoutRedirectUri, UriKind.Absolute, out _))
+{
+    throw new InvalidOperationException("DEVUI_OIDC_POST_LOGOUT_REDIRECT_URI must be an absolute URI registered with Cognito.");
+}
+var contextRetrieverCredential = oidcEnabled
+    ? new ContextRetrieverCredential(
+        Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY"),
+        contextRetrieverCredentialVersion)
+    : userDirectory.AgentCredential ?? (userDirectory.IsMultiUser
     ? null
     : new ContextRetrieverCredential(
         Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY"),
@@ -78,7 +112,7 @@ var legacyUser = new TravelUser(
     ContextRetrieverDelegatedTokenVersion: null,
     ContextRetrieverDelegatedTokenExpiresAt: null);
 var httpContextAccessor = new HttpContextAccessor();
-var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser);
+var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser, authenticationMode);
 var delegatedTokenProvider = new TravelDelegatedTokenProvider(userAccessor);
 var identityResolver = new RamIdentityResolver(userAccessor);
 
@@ -116,7 +150,7 @@ builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
         var effectiveCredential = !string.IsNullOrWhiteSpace(user.ContextRetrieverAgentKey)
             ? new ContextRetrieverCredential(user.ContextRetrieverAgentKey, user.ContextRetrieverCredentialVersion!)
             : contextRetrieverCredential ?? throw new ContextRetrieverAccessDeniedException("No Context Retriever agent credential is configured.");
-        var useDelegatedToken = !string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken);
+        var useDelegatedToken = oidcEnabled || !string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken);
         return ValueTask.FromResult(new ContextRetrieverAccessProfile(
             new Uri(contextRetrieverEndpoint),
             $"travel:{user.IsolationKey}",
@@ -181,22 +215,108 @@ builder.AddAIAgent(AgentName, (services, name) =>
     .AsBuilder()
     .UseOpenTelemetry(AgentTelemetrySourceName)
     .Build(services))
-    .WithInMemorySessionStore(withIsolation: userDirectory.IsMultiUser);
+    .WithInMemorySessionStore(withIsolation: authenticationRequired);
 
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
-if (userDirectory.IsMultiUser)
+if (authenticationRequired)
 {
-    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-        .AddCookie(options =>
+    var ticketStore = new InMemoryAuthenticationTicketStore();
+    builder.Services.AddSingleton(ticketStore);
+    var authentication = builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultSignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = oidcEnabled
+            ? TravelAuthentication.OpenIdConnectScheme
+            : CookieAuthenticationDefaults.AuthenticationScheme;
+    });
+    authentication.AddCookie(options =>
+    {
+        options.Cookie.Name = "redis-iris-devui-user";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = oidcEnabled ? SameSiteMode.Lax : SameSiteMode.Strict;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.LoginPath = "/login";
+        options.AccessDeniedPath = "/login";
+        options.SessionStore = ticketStore;
+    });
+    if (oidcEnabled)
+    {
+        authentication.AddOpenIdConnect(TravelAuthentication.OpenIdConnectScheme, options =>
         {
-            options.Cookie.Name = "redis-iris-devui-user";
-            options.Cookie.HttpOnly = true;
-            options.Cookie.SameSite = SameSiteMode.Strict;
-            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
-            options.LoginPath = "/login";
-            options.AccessDeniedPath = "/login";
+            options.Authority = oidcAuthority;
+            options.ClientId = oidcClientId;
+            options.CallbackPath = "/signin-oidc";
+            options.SignedOutCallbackPath = "/signout-callback-oidc";
+            options.ResponseType = "code";
+            options.UsePkce = true;
+            options.SaveTokens = true;
+            options.UseTokenLifetime = true;
+            options.MapInboundClaims = false;
+            options.GetClaimsFromUserInfoEndpoint = false;
+            options.Scope.Clear();
+            options.Scope.Add("openid");
+            options.Scope.Add("email");
+            options.Scope.Add(oidcContextScope!);
+            options.TokenValidationParameters.NameClaimType = "email";
+            options.Events = new OpenIdConnectEvents
+            {
+                OnRedirectToIdentityProvider = context =>
+                {
+                    context.ProtocolMessage.SetParameter("resource", oidcAudience);
+                    return Task.CompletedTask;
+                },
+                OnTokenValidated = async context =>
+                {
+                    try
+                    {
+                        var accessToken = context.TokenEndpointResponse?.AccessToken;
+                        var configurationManager = context.Options.ConfigurationManager;
+                        if (string.IsNullOrWhiteSpace(accessToken) || configurationManager is null || context.Principal is null)
+                        {
+                            context.Fail("Cognito did not return a complete authorization-code token response.");
+                            return;
+                        }
+
+                        var discovery = await configurationManager.GetConfigurationAsync(
+                            context.HttpContext.RequestAborted).ConfigureAwait(false);
+                        var validation = await context.Options.TokenHandler.ValidateTokenAsync(accessToken, new TokenValidationParameters
+                        {
+                            RequireSignedTokens = true,
+                            ValidateIssuerSigningKey = true,
+                            IssuerSigningKeys = discovery.SigningKeys,
+                            ValidateIssuer = true,
+                            ValidIssuer = oidcAuthority,
+                            ValidateAudience = true,
+                            ValidAudience = oidcAudience,
+                            ValidateLifetime = true,
+                            RequireExpirationTime = true,
+                            ClockSkew = TimeSpan.FromMinutes(1),
+                            NameClaimType = "sub",
+                        }).ConfigureAwait(false);
+                        if (!validation.IsValid || validation.ClaimsIdentity is null)
+                        {
+                            context.Fail("Cognito returned an invalid Context Retriever access token.");
+                            return;
+                        }
+
+                        TravelAuthentication.ApplyValidatedAccessTokenClaims(
+                            context.Principal,
+                            validation.ClaimsIdentity,
+                            oidcContextScope!);
+                    }
+                    catch (Exception exception) when (exception is not OperationCanceledException)
+                    {
+                        context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                            .CreateLogger("RedisIrisDevUI.Oidc")
+                            .LogWarning(exception, "Rejected the Cognito access token.");
+                        context.Fail("Cognito access-token validation failed.");
+                    }
+                },
+            };
         });
+    }
     builder.Services.AddAuthorization();
 }
 builder.AddDevUI(options =>
@@ -204,7 +324,7 @@ builder.AddDevUI(options =>
     // Docker port forwarding appears as a non-loopback caller inside the container.
     // The Compose file binds the published port to host loopback only.
     options.AllowRemoteAccess = ParseBoolean(builder.Configuration, "DEVUI_ALLOW_REMOTE_ACCESS", false);
-    if (userDirectory.IsMultiUser)
+    if (authenticationRequired)
     {
         options.ConfigureEndpoints = endpoints => endpoints.RequireAuthorization();
     }
@@ -220,31 +340,50 @@ if (!app.Environment.IsDevelopment())
     throw new InvalidOperationException("RedisIrisDevUI is a local development sample and only runs in the Development environment.");
 }
 
-if (userDirectory.IsMultiUser)
+if (authenticationRequired)
 {
     app.UseAuthentication();
     app.UseAuthorization();
-    app.MapGet("/login", () => Results.Content(LoginPage(), "text/html"));
-    app.MapPost("/login", async (HttpContext httpContext) =>
+    if (oidcEnabled)
     {
-        var form = await httpContext.Request.ReadFormAsync(httpContext.RequestAborted);
-        var user = userDirectory.Authenticate(form["token"].ToString());
-        if (user is null) return Results.Content(LoginPage("Invalid sign-in token."), "text/html", statusCode: StatusCodes.Status401Unauthorized);
+        app.MapGet("/login", () => Results.Challenge(
+            new AuthenticationProperties { RedirectUri = "/devui/?entity_id=redis-iris-travel-assistant" },
+            [TravelAuthentication.OpenIdConnectScheme]));
+        app.MapPost("/logout", async (HttpContext httpContext) =>
+        {
+            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            var logoutUrl = QueryHelpers.AddQueryString(oidcLogoutEndpoint!, new Dictionary<string, string?>
+            {
+                ["client_id"] = oidcClientId,
+                ["logout_uri"] = oidcPostLogoutRedirectUri,
+            });
+            return Results.Redirect(logoutUrl);
+        }).RequireAuthorization().DisableAntiforgery();
+    }
+    else
+    {
+        app.MapGet("/login", () => Results.Content(LoginPage(), "text/html"));
+        app.MapPost("/login", async (HttpContext httpContext) =>
+        {
+            var form = await httpContext.Request.ReadFormAsync(httpContext.RequestAborted);
+            var user = userDirectory.Authenticate(form["token"].ToString());
+            if (user is null) return Results.Content(LoginPage("Invalid sign-in token."), "text/html", statusCode: StatusCodes.Status401Unauthorized);
 
-        var principal = TravelUserDirectory.CreatePrincipal(user, CookieAuthenticationDefaults.AuthenticationScheme);
-        await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-        return Results.Redirect("/devui/?entity_id=redis-iris-travel-assistant");
-    }).DisableAntiforgery();
-    app.MapPost("/logout", async (HttpContext httpContext) =>
-    {
-        await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        return Results.Redirect("/login");
-    }).RequireAuthorization().DisableAntiforgery();
+            var principal = TravelUserDirectory.CreatePrincipal(user, CookieAuthenticationDefaults.AuthenticationScheme);
+            await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
+            return Results.Redirect("/devui/?entity_id=redis-iris-travel-assistant");
+        }).DisableAntiforgery();
+        app.MapPost("/logout", async (HttpContext httpContext) =>
+        {
+            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Redirect("/login");
+        }).RequireAuthorization().DisableAntiforgery();
+    }
 }
 
 var responsesEndpoints = app.MapOpenAIResponses();
 var conversationEndpoints = app.MapOpenAIConversations();
-if (userDirectory.IsMultiUser)
+if (authenticationRequired)
 {
     responsesEndpoints.RequireAuthorization();
     conversationEndpoints.RequireAuthorization();
@@ -252,7 +391,7 @@ if (userDirectory.IsMultiUser)
 app.MapDevUI();
 
 var dashboardEndpoint = app.MapGet("/", (TravelUserAccessor users) =>
-    Results.Content(Dashboard(users.Current, shortTermWindow, userDirectory.IsMultiUser), "text/html"));
+    Results.Content(Dashboard(users.Current, shortTermWindow, authenticationRequired), "text/html"));
 
 var ramEndpoint = app.MapGet("/api/ram", async (
     IRedisAgentMemoryClient client,
@@ -345,7 +484,7 @@ var clearRamEndpoint = app.MapDelete("/api/ram", async (
     return Results.Ok(new { ownerId, sessionsDeleted = sessionIds.Count, longTermMemoriesDeleted = memories.Count });
 });
 
-if (userDirectory.IsMultiUser)
+if (authenticationRequired)
 {
     dashboardEndpoint.RequireAuthorization();
     ramEndpoint.RequireAuthorization();
@@ -356,8 +495,8 @@ if (userDirectory.IsMultiUser)
     contextStatusEndpoint.RequireAuthorization();
 }
 
-Console.WriteLine(userDirectory.IsMultiUser
-    ? "Redis Iris DevUI authentication: multi-user cookie mode"
+Console.WriteLine(authenticationRequired
+    ? $"Redis Iris DevUI authentication: {(oidcEnabled ? "Cognito OIDC" : "development sign-in token")} mode"
     : $"Redis Iris DevUI owner: {ownerId} (legacy single-user mode)");
 Console.WriteLine("Redis Context Retriever: configured (lazy MCP connection)");
 Console.WriteLine("Dashboard: http://localhost:5080/");

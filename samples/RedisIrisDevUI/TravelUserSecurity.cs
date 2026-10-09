@@ -6,6 +6,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Redis.Iris.ContextRetriever;
 
 namespace RedisIrisDevUI;
@@ -163,9 +165,35 @@ internal sealed class TravelUserDirectory
 
 internal sealed class TravelDelegatedTokenProvider(TravelUserAccessor users) : IContextRetrieverDelegatedTokenProvider
 {
-    public ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (users.AuthenticationMode == TravelAuthenticationMode.OpenIdConnect)
+        {
+            var httpContext = users.HttpContext
+                ?? throw new ContextRetrieverAccessDeniedException("No authenticated HTTP caller is available.");
+            var authentication = await httpContext.AuthenticateAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
+            if (!authentication.Succeeded || authentication.Principal is null || authentication.Properties is null)
+            {
+                throw new ContextRetrieverAccessDeniedException("The OIDC authentication ticket is unavailable.");
+            }
+
+            var accessToken = authentication.Properties.GetTokenValue("access_token");
+            var expiresAtValue = authentication.Properties.GetTokenValue("expires_at");
+            var version = authentication.Principal.FindFirstValue(TravelAuthentication.AccessTokenVersionClaim);
+            if (string.IsNullOrWhiteSpace(accessToken) || string.IsNullOrWhiteSpace(version) ||
+                !DateTimeOffset.TryParse(expiresAtValue, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var expiresAt))
+            {
+                throw new ContextRetrieverAccessDeniedException("The OIDC authentication ticket does not contain a complete delegated access token.");
+            }
+
+            var delegatedToken = new ContextRetrieverDelegatedToken(accessToken, version, expiresAt);
+            delegatedToken.Validate();
+            return delegatedToken;
+        }
+
         var user = users.Current;
         var token = new ContextRetrieverDelegatedToken(
             user.ContextRetrieverDelegatedToken
@@ -175,19 +203,54 @@ internal sealed class TravelDelegatedTokenProvider(TravelUserAccessor users) : I
             user.ContextRetrieverDelegatedTokenExpiresAt
                 ?? throw new ContextRetrieverAccessDeniedException("No delegated Context Retriever token expiry is available for this user."));
         token.Validate();
-        return ValueTask.FromResult(token);
+        return token;
     }
 }
 
 internal sealed class TravelUserAccessor(
     IHttpContextAccessor httpContextAccessor,
     TravelUserDirectory directory,
-    TravelUser legacyUser)
+    TravelUser legacyUser,
+    TravelAuthenticationMode authenticationMode)
 {
-    public TravelUser Current => directory.IsMultiUser
-        ? directory.Resolve(httpContextAccessor.HttpContext?.User
-            ?? throw new UnauthorizedAccessException("No authenticated HTTP caller is available."))
-        : legacyUser;
+    public TravelAuthenticationMode AuthenticationMode { get; } = authenticationMode;
+
+    public HttpContext? HttpContext => httpContextAccessor.HttpContext;
+
+    public TravelUser Current => AuthenticationMode == TravelAuthenticationMode.OpenIdConnect
+        ? ResolveOpenIdConnectUser(httpContextAccessor.HttpContext?.User)
+        : directory.IsMultiUser
+            ? directory.Resolve(httpContextAccessor.HttpContext?.User
+                ?? throw new UnauthorizedAccessException("No authenticated HTTP caller is available."))
+            : legacyUser;
+
+    private static TravelUser ResolveOpenIdConnectUser(ClaimsPrincipal? principal)
+    {
+        if (principal?.Identity?.IsAuthenticated != true)
+        {
+            throw new UnauthorizedAccessException("No authenticated OIDC caller is available.");
+        }
+
+        var subject = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        var tenantId = principal.FindFirstValue(TravelUserDirectory.TenantClaim);
+        var travelerId = principal.FindFirstValue(TravelUserDirectory.TravelerClaim);
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(tenantId) || string.IsNullOrWhiteSpace(travelerId))
+        {
+            throw new UnauthorizedAccessException("The authenticated OIDC caller is missing its trusted travel boundary.");
+        }
+
+        return new TravelUser(
+            subject,
+            principal.Identity.Name ?? principal.FindFirstValue("email") ?? subject,
+            tenantId,
+            travelerId,
+            SignInToken: string.Empty,
+            ContextRetrieverAgentKey: null,
+            ContextRetrieverCredentialVersion: null,
+            ContextRetrieverDelegatedToken: null,
+            ContextRetrieverDelegatedTokenVersion: null,
+            ContextRetrieverDelegatedTokenExpiresAt: null);
+    }
 }
 
 internal sealed class TravelAgentIsolationKeyProvider(TravelUserAccessor users) : AgentIsolationKeyProvider

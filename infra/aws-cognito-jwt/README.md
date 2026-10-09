@@ -35,6 +35,19 @@ The expected Context Retriever trust configuration is available from:
 terraform output -json context_retriever_idp_configuration
 ```
 
+The non-secret settings for the optional DevUI OIDC mode are available from:
+
+```bash
+terraform output -json devui_oidc_environment
+```
+
+Copy those values into the repository's ignored `.env.local` file and set
+`REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY` to a **tenant-scoped** agent key whose server-side access tags contain the same `tenant_id` as the Cognito demo users. The JWT supplies the narrower `traveler_id` boundary. Do not use either an administrative key or one of the default sample's per-traveler keys for this test.
+
+`DEVUI_AUTH_MODE` defaults to `token`, so deploying this Terraform does not change the sample's normal local sign-in-token behavior. Setting it to `oidc` changes `/login` to an authorization-code + PKCE challenge. The DevUI validates the returned access token's signature, issuer, audience, lifetime, scope, `sub`, `tenant_id`, `traveler_id`, and `jti` before using those claims. The access and refresh tokens remain in the process-local authentication-ticket store; the browser receives only an opaque, HTTP-only session cookie. Restarting the sample signs users out, which is appropriate for this local test application.
+
+The sample deliberately binds its cookie lifetime to Cognito's token lifetime instead of implementing background refresh. Sign in again after the configured 15-minute access-token lifetime. This keeps the test path small while proving issuance, validation, delegated Context Retriever authorization, and traveler isolation.
+
 The live test must prove that the delegated traveler token can only narrow the tenant agent key. Do not enable this path if the target deployment allows JWT-derived tags to replace or widen agent-key constraints.
 
 ## What Terraform creates
