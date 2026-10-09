@@ -61,15 +61,19 @@ var travelContextModel = TravelContext.Model;
 var userDirectory = TravelUserDirectory.Load(
     builder.Configuration["DEVUI_USERS_FILE"],
     builder.Configuration["DEVUI_USERS_JSON"]);
-var contextRetrieverCredential = userDirectory.AgentCredential ?? new ContextRetrieverCredential(
-    Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY"),
-    contextRetrieverCredentialVersion);
+var contextRetrieverCredential = userDirectory.AgentCredential ?? (userDirectory.IsMultiUser
+    ? null
+    : new ContextRetrieverCredential(
+        Required(builder.Configuration, "REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY"),
+        contextRetrieverCredentialVersion));
 var legacyUser = new TravelUser(
     Subject: ownerId,
     DisplayName: ownerId,
     TenantId: "redis-iris-devui",
     TravelerId: ownerId,
     SignInToken: "legacy-single-user-mode",
+    ContextRetrieverAgentKey: null,
+    ContextRetrieverCredentialVersion: null,
     ContextRetrieverDelegatedToken: null,
     ContextRetrieverDelegatedTokenVersion: null,
     ContextRetrieverDelegatedTokenExpiresAt: null);
@@ -108,10 +112,14 @@ builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
     {
         cancellationToken.ThrowIfCancellationRequested();
         var user = userAccessor.Current;
+        var effectiveCredential = !string.IsNullOrWhiteSpace(user.ContextRetrieverAgentKey)
+            ? new ContextRetrieverCredential(user.ContextRetrieverAgentKey, user.ContextRetrieverCredentialVersion!)
+            : contextRetrieverCredential ?? throw new ContextRetrieverAccessDeniedException("No Context Retriever agent credential is configured.");
+        var useDelegatedToken = !string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken);
         return ValueTask.FromResult(new ContextRetrieverAccessProfile(
             new Uri(contextRetrieverEndpoint),
             $"travel:{user.IsolationKey}",
-            new FixedContextRetrieverCredentialProvider(contextRetrieverCredential),
+            new FixedContextRetrieverCredentialProvider(effectiveCredential),
             new Dictionary<string, IReadOnlyDictionary<string, object?>>(StringComparer.Ordinal)
             {
                 ["get_traveler_by_id"] = new Dictionary<string, object?>(StringComparer.Ordinal)
@@ -119,7 +127,7 @@ builder.Services.AddSingleton<IContextRetrieverAccessResolver>(
                     ["id"] = user.TravelerId,
                 },
             },
-            userDirectory.IsMultiUser ? delegatedTokenProvider : null));
+            useDelegatedToken ? delegatedTokenProvider : null));
     }));
 builder.Services.AddSingleton<IContextRetrieverClientFactory>(services =>
     new ContextRetrieverClientFactory(services.GetRequiredService<ILoggerFactory>()));

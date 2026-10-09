@@ -83,26 +83,7 @@ The agent key must belong to the provisioned travel surface. The optional non-se
 
 ## Demonstrate multi-user isolation
 
-The one-shot `context-provisioner` creates one agent key limited to the demo tenant. Traveler isolation comes from delegated JWTs issued by an identity provider trusted by the Context Retriever surface. Before provisioning, create the ignored `artifacts/context-retriever/redis-iris-travel-delegated-tokens.json` file:
-
-```json
-[
-  {
-    "subject": "avery",
-    "token": "signed JWT carrying the mapped tenant_id and traveler_id claims",
-    "version": "the token jti or another non-secret rotation identifier",
-    "expiresAt": "2026-10-09T22:00:00Z"
-  },
-  {
-    "subject": "blake",
-    "token": "signed JWT carrying the mapped tenant_id and traveler_id claims",
-    "version": "another non-secret rotation identifier",
-    "expiresAt": "2026-10-09T22:00:00Z"
-  }
-]
-```
-
-The subjects must match those emitted by `--print-context-users`. Tokens must still be valid when the DevUI starts. The sample accepts pre-issued tokens because it cannot impersonate your production identity provider; a production implementation supplies a refreshing `IContextRetrieverDelegatedTokenProvider` backed by its normal OIDC/OAuth token service. Configure the surface's JWT/JWKS claim mapping so the signed claims map to the `tenant_id` and `traveler_id` access tags before running this demo. This security model requires a Context Retriever deployment that intersects JWT-derived tags with agent-key tags per access dimension; the live isolation tests deliberately fail if the deployment broadens or overrides either boundary.
+The one-shot `context-provisioner` creates one explicitly scoped agent key per demo traveler. This is the supported local path and does not depend on the managed service's preview IdP configuration. The application selects credentials only from its authenticated server-side user directory; neither the model nor the browser receives an agent key.
 
 Run the provisioner before starting DevUI:
 
@@ -111,18 +92,16 @@ docker compose --profile context-retriever run --rm context-provisioner
 docker compose up --build -d devui
 ```
 
-If you have an older array-shaped bundle created by the per-traveler-agent version of this sample, remove that ignored local bundle before the first run of the new provisioner. The old managed agents are no longer used and can be deleted separately after the new tenant agent is verified.
-
-The provisioner combines the tenant key, delegated JWT metadata, and newly generated independent DevUI sign-in tokens in `artifacts/context-retriever/redis-iris-travel-users.json` with mode `0600`. The DevUI container mounts that bundle read-only and enables multi-user mode automatically. To retrieve a local sign-in token, inspect the ignored credential file directly; do not commit or share it. Replace expired JWTs in the delegated-token input file and rerun the provisioner; it preserves the tenant key and local sign-in tokens while refreshing only the delegated tokens. Because the control plane only returns a full agent key at creation time, deleting the runtime bundle requires explicitly deleting or rotating the corresponding managed tenant agent before generating a replacement.
+The provisioner writes the scoped keys and independent high-entropy DevUI sign-in tokens to `artifacts/context-retriever/redis-iris-travel-users.json` with mode `0600`. The DevUI container mounts that bundle read-only and enables multi-user mode automatically. To retrieve a local sign-in token, inspect the ignored credential file directly; do not commit or share it. Because the control plane only returns a full agent key at creation time, deleting the bundle requires explicitly deleting or rotating the corresponding managed agents before generating replacements.
 
 When this setting contains at least two users, the sample enables cookie authentication and Agent Framework session isolation. Open `/login`, enter one user’s local token, and then use DevUI normally. The authenticated server-side mapping supplies all of the following; none are accepted from model tool arguments:
 
 - Agent Framework isolation key: `tenant_id:traveler_id`
 - RAM tenant and actor identity, with a storage-safe length-prefixed owner derived from `tenant_id` and `traveler_id`
-- Context Retriever access-profile ID and delegated user JWT; the tenant agent key remains server-side
+- Context Retriever access-profile ID and traveler-scoped agent key
 - Filtering for the `/api/context/examples` inspection endpoint
 
-Sign out before testing the second traveler. Both users deliberately share the tenant agent key, while Context Retriever intersects that boundary with the current user's JWT-derived traveler scope. The JWT is attached by the connector and is never a model-visible tool argument. Runtime application instances should never receive Context Retriever administrative credentials.
+Sign out before testing the second traveler. The provisioned keys are distinct and carry different `traveler_id` access tags. For a deployable delegated-JWT example backed by Cognito, see [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md). Runtime application instances should never receive Context Retriever administrative credentials.
 
 ## Run the Docker observability demo
 

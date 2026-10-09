@@ -15,6 +15,8 @@ internal sealed record TravelUser(
     string TenantId,
     string TravelerId,
     string SignInToken,
+    string? ContextRetrieverAgentKey,
+    string? ContextRetrieverCredentialVersion,
     string? ContextRetrieverDelegatedToken,
     string? ContextRetrieverDelegatedTokenVersion,
     DateTimeOffset? ContextRetrieverDelegatedTokenExpiresAt)
@@ -56,9 +58,13 @@ internal sealed class TravelUserDirectory
     {
         if (string.IsNullOrWhiteSpace(json)) return new([]);
 
-        var bundle = JsonSerializer.Deserialize<TravelSecurityBundle>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web))
-            ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain a tenant credential bundle.");
-        var users = bundle.Users ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain users.");
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        using var document = JsonDocument.Parse(json);
+        var bundle = document.RootElement.ValueKind == JsonValueKind.Array
+            ? null
+            : JsonSerializer.Deserialize<TravelSecurityBundle>(json, options);
+        var users = bundle?.Users ?? JsonSerializer.Deserialize<List<TravelUser>>(json, options)
+            ?? throw new InvalidOperationException("DEVUI_USERS_JSON must contain users.");
         if (users.Count < 2)
         {
             throw new InvalidOperationException("DEVUI_USERS_JSON must contain at least two users for multi-user mode.");
@@ -68,17 +74,17 @@ internal sealed class TravelUserDirectory
         {
             if (string.IsNullOrWhiteSpace(user.Subject) || string.IsNullOrWhiteSpace(user.DisplayName) ||
                 string.IsNullOrWhiteSpace(user.TenantId) || string.IsNullOrWhiteSpace(user.TravelerId) ||
-                string.IsNullOrWhiteSpace(user.SignInToken) || string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken) ||
-                string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedTokenVersion) ||
-                user.ContextRetrieverDelegatedTokenExpiresAt is null)
+                string.IsNullOrWhiteSpace(user.SignInToken) ||
+                (!HasAgentCredential(user) && !HasDelegatedToken(user)))
             {
                 throw new InvalidOperationException("Every DEVUI_USERS_JSON user field is required.");
             }
 
-            new ContextRetrieverDelegatedToken(
-                user.ContextRetrieverDelegatedToken,
-                user.ContextRetrieverDelegatedTokenVersion,
-                user.ContextRetrieverDelegatedTokenExpiresAt.Value).Validate();
+            if (HasDelegatedToken(user))
+                new ContextRetrieverDelegatedToken(
+                    user.ContextRetrieverDelegatedToken!,
+                    user.ContextRetrieverDelegatedTokenVersion!,
+                    user.ContextRetrieverDelegatedTokenExpiresAt!.Value).Validate();
         }
 
         if (users.Select(static user => user.Subject).Distinct(StringComparer.Ordinal).Count() != users.Count ||
@@ -92,10 +98,19 @@ internal sealed class TravelUserDirectory
             throw new InvalidOperationException("A DevUI tenant credential bundle cannot span multiple tenants.");
         }
 
-        var credential = new ContextRetrieverCredential(bundle.ContextRetrieverAgentKey, bundle.ContextRetrieverCredentialVersion);
-        credential.Validate();
+        var credential = bundle is null ? null : new ContextRetrieverCredential(bundle.ContextRetrieverAgentKey, bundle.ContextRetrieverCredentialVersion);
+        credential?.Validate();
         return new(users, credential);
     }
+
+    private static bool HasAgentCredential(TravelUser user) =>
+        !string.IsNullOrWhiteSpace(user.ContextRetrieverAgentKey) &&
+        !string.IsNullOrWhiteSpace(user.ContextRetrieverCredentialVersion);
+
+    private static bool HasDelegatedToken(TravelUser user) =>
+        !string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedToken) &&
+        !string.IsNullOrWhiteSpace(user.ContextRetrieverDelegatedTokenVersion) &&
+        user.ContextRetrieverDelegatedTokenExpiresAt is not null;
 
     public static TravelUserDirectory Load(string? path, string? json)
     {

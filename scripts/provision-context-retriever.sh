@@ -107,9 +107,59 @@ else
 fi
 
 if [[ ! -f "${delegated_tokens_path}" ]]; then
-  echo "Missing delegated-user token file: ${delegated_tokens_path}" >&2
-  echo "Create it from your trusted IdP before provisioning; see samples/RedisIrisDevUI/README.md." >&2
-  exit 2
+  if [[ -f "${user_credentials_path}" ]]; then
+    if jq -e 'type == "array" and all(.[]; (.contextRetrieverAgentKey | length > 0) and (.signInToken | length > 0))' \
+      "${user_credentials_path}" >/dev/null; then
+      echo "Per-traveler Context Retriever credentials already exist; reusing them."
+      exit 0
+    fi
+    echo "Existing credential bundle is not the supported local per-traveler format." >&2
+    exit 1
+  fi
+
+  agent_list_output="$(ctxctl --no-color --output json agent list --surface-id "${surface_id}" --page-size 100)"
+  if jq -e 'type == "array"' >/dev/null 2>&1 <<<"${agent_list_output}"; then
+    existing_agents="${agent_list_output}"
+  elif [[ "${agent_list_output}" == *"No agent"*"found"* ]]; then
+    existing_agents='[]'
+  else
+    echo "ctxctl returned an unexpected agent-list response." >&2
+    exit 1
+  fi
+
+  credentials_tmp="$(mktemp "${artifact_dir}/redis-iris-travel-users.XXXXXX")"
+  trap 'rm -f "${credentials_tmp}"' EXIT
+  printf '[]\n' > "${credentials_tmp}"
+  while IFS= read -r profile; do
+    subject="$(jq -er '.subject' <<<"${profile}")"
+    display_name="$(jq -er '.display_name' <<<"${profile}")"
+    tenant_id="$(jq -er '.tenant_id' <<<"${profile}")"
+    traveler_id="$(jq -er '.traveler_id' <<<"${profile}")"
+    agent_name="redis-iris-devui-${subject}"
+    if [[ "$(jq --arg name "${agent_name}" '[.[] | select(.name == $name)] | length' <<<"${existing_agents}")" -ne 0 ]]; then
+      echo "Agent '${agent_name}' already exists but its key is not in the local bundle." >&2
+      exit 1
+    fi
+    access_tags="$(jq -cn --arg tenant "${tenant_id}" --arg traveler "${traveler_id}" '{tenant_id: [$tenant], traveler_id: [$traveler]}')"
+    agent_output="$(ctxctl --no-color --output json agent create --surface-id "${surface_id}" --name "${agent_name}" \
+      --description "DevUI credential for ${tenant_id}/${traveler_id}" --access-tags "${access_tags}")"
+    agent_key="$(jq -er '.key | select(startswith("cs_agent_"))' <<<"${agent_output}")"
+    credential_version="$(jq -er '.id' <<<"${agent_output}")"
+    sign_in_token="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    jq --arg subject "${subject}" --arg display_name "${display_name}" --arg tenant_id "${tenant_id}" \
+      --arg traveler_id "${traveler_id}" --arg sign_in_token "${sign_in_token}" --arg agent_key "${agent_key}" \
+      --arg credential_version "${credential_version}" '. + [{subject:$subject, displayName:$display_name,
+      tenantId:$tenant_id, travelerId:$traveler_id, signInToken:$sign_in_token,
+      contextRetrieverAgentKey:$agent_key, contextRetrieverCredentialVersion:$credential_version}]' \
+      "${credentials_tmp}" > "${credentials_tmp}.next"
+    mv "${credentials_tmp}.next" "${credentials_tmp}"
+    chmod 0600 "${credentials_tmp}"
+  done < <(jq -c '.[]' "${user_profiles_path}")
+  mv "${credentials_tmp}" "${user_credentials_path}"
+  chmod 0600 "${user_credentials_path}"
+  trap - EXIT
+  echo "Wrote per-traveler local credentials to ${user_credentials_path}."
+  exit 0
 fi
 
 if ! jq -e --slurpfile profiles "${user_profiles_path}" '
