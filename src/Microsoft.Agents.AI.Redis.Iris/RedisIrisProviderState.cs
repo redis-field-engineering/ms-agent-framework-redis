@@ -9,7 +9,7 @@ public sealed class RedisIrisProviderState
 {
     /// <summary>Initializes session-scoped Redis Iris state.</summary>
     [JsonConstructor]
-    public RedisIrisProviderState(string sessionId, string ownerId, string agentId)
+    public RedisIrisProviderState(string sessionId, string ownerId, string agentId, string? actorId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
@@ -17,6 +17,7 @@ public sealed class RedisIrisProviderState
         this.SessionId = sessionId;
         this.OwnerId = ownerId;
         this.AgentId = agentId;
+        this.ActorId = string.IsNullOrWhiteSpace(actorId) ? ownerId : actorId;
     }
 
     /// <summary>Gets the Redis Agent Memory session identifier.</summary>
@@ -24,6 +25,9 @@ public sealed class RedisIrisProviderState
 
     /// <summary>Gets the authorized memory owner identifier.</summary>
     public string OwnerId { get; }
+
+    /// <summary>Gets the user actor identifier written to session events. This is distinct from the storage owner.</summary>
+    public string ActorId { get; }
 
     /// <summary>Gets the stable agent actor identifier.</summary>
     public string AgentId { get; }

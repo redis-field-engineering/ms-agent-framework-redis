@@ -33,15 +33,15 @@ public sealed class RedisIrisMessageMapper
     public AddSessionEventRequest? ToSessionEventRequest(
         ChatMessage message,
         string sessionId,
-        string ownerId,
+        string actorId,
         string agentId)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
         ArgumentException.ThrowIfNullOrWhiteSpace(agentId);
 
-        var mapping = this.MapRole(message.Role, ownerId, agentId);
+        var mapping = this.MapRole(message.Role, actorId, agentId);
         if (mapping is null)
         {
             AgentMemoryDiagnostics.RecordSkippedMessage("unsupported_role");
@@ -99,11 +99,11 @@ public sealed class RedisIrisMessageMapper
         };
     }
 
-    private (SessionEventRole Role, string ActorId)? MapRole(ChatRole role, string ownerId, string agentId)
+    private (SessionEventRole Role, string ActorId)? MapRole(ChatRole role, string actorId, string agentId)
     {
         if (role == ChatRole.User)
         {
-            return (SessionEventRole.USER, ownerId);
+            return (SessionEventRole.USER, actorId);
         }
 
         if (role == ChatRole.Assistant)

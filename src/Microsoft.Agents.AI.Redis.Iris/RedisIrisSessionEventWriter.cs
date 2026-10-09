@@ -55,7 +55,7 @@ public sealed class RedisIrisSessionEventWriter
         foreach (var message in messages)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var request = this._mapper.ToSessionEventRequest(message, state.SessionId, state.OwnerId, state.AgentId);
+            var request = this._mapper.ToSessionEventRequest(message, state.SessionId, state.ActorId, state.AgentId);
             if (request is null)
             {
                 continue;

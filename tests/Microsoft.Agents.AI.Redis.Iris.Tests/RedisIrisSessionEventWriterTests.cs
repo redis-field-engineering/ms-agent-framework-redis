@@ -36,6 +36,18 @@ public sealed class RedisIrisSessionEventWriterTests
         Assert.Single(client.Added);
     }
 
+    [Fact]
+    public async Task UserEventsUseCanonicalActorInsteadOfStorageOwner()
+    {
+        var client = new RecordingClient();
+        var writer = new RedisIrisSessionEventWriter(client, RedisIrisEventWriter.ChatHistoryProvider);
+        var state = new RedisIrisProviderState("session", "17-tenant-12-traveler-001", "agent", "traveler-001");
+
+        await writer.WriteAsync(RedisIrisEventWriter.ChatHistoryProvider, [new(ChatRole.User, "hello")], state);
+
+        Assert.Equal("traveler-001", Assert.Single(client.Added).ActorId);
+    }
+
     private sealed class RecordingClient : IRedisAgentMemoryClient
     {
         public List<AddSessionEventRequest> Added { get; } = [];

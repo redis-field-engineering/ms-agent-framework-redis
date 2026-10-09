@@ -86,7 +86,7 @@ public sealed class RedisIrisChatHistoryProviderTests
     [Fact]
     public void ProviderStateRoundTripsThroughJson()
     {
-        var state = new RedisIrisProviderState("session-a", "owner-a", "agent-a");
+        var state = new RedisIrisProviderState("session-a", "owner-a", "agent-a", "traveler-001");
 
         var restored = JsonSerializer.Deserialize<RedisIrisProviderState>(JsonSerializer.Serialize(state));
 
@@ -94,6 +94,26 @@ public sealed class RedisIrisChatHistoryProviderTests
         Assert.Equal(state.SessionId, restored.SessionId);
         Assert.Equal(state.OwnerId, restored.OwnerId);
         Assert.Equal(state.AgentId, restored.AgentId);
+        Assert.Equal(state.ActorId, restored.ActorId);
+    }
+
+    [Fact]
+    public async Task LoadedUserHistoryUsesCanonicalActorInsteadOfLegacyStorageOwner()
+    {
+        var client = new RecordingClient
+        {
+            Memory = new("session-a", "17-tenant-12-traveler-001",
+            [
+                Event("1", "session-a", "17-tenant-12-traveler-001", SessionEventRole.USER, "hello", 1),
+            ]),
+        };
+        var state = new RedisIrisProviderState(
+            "session-a", "17-tenant-12-traveler-001", "agent-a", "traveler-001");
+        var provider = Provider(client, state);
+
+        var result = await provider.InvokingAsync(new(s_agent, null, []));
+
+        Assert.Equal("traveler-001", Assert.Single(result).AuthorName);
     }
 
     [Fact]

@@ -112,7 +112,17 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
             events = events.TakeLast(maximum);
         }
 
-        return events.Select(this._mapper.ToChatMessage).ToList();
+        return events.Select(sessionEvent =>
+        {
+            var message = this._mapper.ToChatMessage(sessionEvent);
+            if (message.Role == ChatRole.User)
+            {
+                // The RAM event actor may contain a legacy storage-owner value. Never expose that
+                // implementation identifier to the model when a canonical actor is available.
+                message.AuthorName = state.ActorId;
+            }
+            return message;
+        }).ToList();
     }
 
     /// <inheritdoc />

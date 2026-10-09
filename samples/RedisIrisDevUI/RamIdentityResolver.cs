@@ -20,7 +20,7 @@ internal sealed class RamIdentityResolver(TravelUserAccessor users)
                 TenantId: user.TenantId,
                 OwnerId: user.RamOwnerId,
                 SessionId: $"redis-iris-devui-{Guid.NewGuid():N}",
-                ActorId: user.Subject,
+                ActorId: user.TravelerId,
                 AgentId: "redis-iris-travel-assistant");
             Console.WriteLine($"RAM TENANT : {created.TenantId}");
             Console.WriteLine($"RAM USER   : {created.OwnerId}");

@@ -93,7 +93,7 @@ public static class RedisIrisServiceCollectionExtensions
                 throw new UnauthorizedAccessException("The host application denied the resolved Redis Iris identity.");
             }
 
-            return new(identity.SessionId, identity.OwnerId, identity.AgentId);
+            return new(identity.SessionId, identity.OwnerId, identity.AgentId, identity.ActorId);
         };
 
         if (options.UseChatHistoryProvider)
