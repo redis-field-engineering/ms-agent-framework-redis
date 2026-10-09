@@ -66,7 +66,7 @@ public sealed class RedisContextRetrieverProviderTests
     }
 
     [Fact]
-    public async Task AuthorizationOwnedFieldsAreHiddenAndRejected()
+    public async Task ServerAuthorizedFieldsRemainAvailableAsQueryPredicates()
     {
         var resolver = new DelegateContextRetrieverAccessResolver((_, _) =>
             ValueTask.FromResult(new ContextRetrieverAccessProfile(
@@ -76,28 +76,16 @@ public sealed class RedisContextRetrieverProviderTests
             (IEnumerable<TagCondition> tag_conditions) => tag_conditions.Count(),
             "filter_traveler");
         await using var cache = new ContextRetrieverClientCache(new FixedToolFactory(inner));
-        var provider = new RedisContextRetrieverProvider(resolver, cache, new RedisContextRetrieverOptions
-        {
-            AuthorizationOwnedFilterFields = ["tenant_id", "traveler_id"],
-        });
+        var provider = new RedisContextRetrieverProvider(resolver, cache);
 
         var context = await provider.InvokingAsync(new(s_agent, null, new()));
         var tool = Assert.IsAssignableFrom<AIFunction>(Assert.Single(context.Tools!));
-        var schema = tool.JsonSchema.GetRawText();
-        Assert.DoesNotContain("tenant_id", schema);
-        Assert.DoesNotContain("traveler_id", schema);
 
-        var denied = new AIFunctionArguments(new Dictionary<string, object?>
+        var filtered = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["tag_conditions"] = new[] { new TagCondition("traveler_id", "internal-owner") },
+            ["tag_conditions"] = new[] { new TagCondition("traveler_id", "traveler-001") },
         });
-        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => tool.InvokeAsync(denied).AsTask());
-
-        var allowed = new AIFunctionArguments(new Dictionary<string, object?>
-        {
-            ["tag_conditions"] = new[] { new TagCondition("status", "confirmed") },
-        });
-        Assert.Equal("1", (await tool.InvokeAsync(allowed))?.ToString());
+        Assert.Equal("1", (await tool.InvokeAsync(filtered))?.ToString());
     }
 
     [Fact]

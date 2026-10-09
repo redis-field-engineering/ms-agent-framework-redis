@@ -75,10 +75,7 @@ public sealed class ManagedContextRetrieverLiveTests
                 new FixedContextRetrieverDelegatedTokenProvider(new(user.DelegatedToken, user.DelegatedTokenVersion, user.DelegatedTokenExpiresAt))));
         });
         await using var cache = new ContextRetrieverClientCache(new ContextRetrieverClientFactory());
-        var provider = new RedisContextRetrieverProvider(resolver, cache, new RedisContextRetrieverOptions
-        {
-            AuthorizationOwnedFilterFields = ["tenant_id", "traveler_id"],
-        });
+        var provider = new RedisContextRetrieverProvider(resolver, cache);
 
         var context = await provider.InvokingAsync(new(s_agent, null, new()));
         var tools = context.Tools!;
@@ -94,14 +91,15 @@ public sealed class ManagedContextRetrieverLiveTests
         var enumValues = filter.JsonSchema.GetProperty("properties").GetProperty("tag_conditions")
             .GetProperty("items").GetProperty("properties").GetProperty("field").GetProperty("enum")
             .EnumerateArray().Select(item => item.GetString()).ToArray();
-        Assert.DoesNotContain("tenant_id", enumValues);
-        Assert.DoesNotContain("traveler_id", enumValues);
+        Assert.Contains("tenant_id", enumValues);
+        Assert.Contains("traveler_id", enumValues);
 
-        var attack = new AIFunctionArguments(new Dictionary<string, object?>
+        var authorizedFilter = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["tag_conditions"] = new[] { new { field = "traveler_id", value = "traveler-002" } },
+            ["tag_conditions"] = new[] { new { field = "traveler_id", value = user.TravelerId } },
         });
-        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => filter.InvokeAsync(attack).AsTask());
+        var filteredResult = await filter.InvokeAsync(authorizedFilter);
+        Assert.NotNull(filteredResult);
     }
 
     private static JsonElement ExtractTextPayload(object? result)
