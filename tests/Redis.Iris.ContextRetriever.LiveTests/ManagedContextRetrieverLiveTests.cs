@@ -72,8 +72,7 @@ public sealed class ManagedContextRetrieverLiveTests
                 {
                     ["get_traveler_by_id"] = new Dictionary<string, object?> { ["id"] = user.TravelerId },
                 },
-                new FixedContextRetrieverDelegatedTokenProvider(new(user.DelegatedToken, user.DelegatedTokenVersion, user.DelegatedTokenExpiresAt)),
-                new Dictionary<string, object?> { ["traveler_id"] = user.TravelerId }));
+                new FixedContextRetrieverDelegatedTokenProvider(new(user.DelegatedToken, user.DelegatedTokenVersion, user.DelegatedTokenExpiresAt))));
         });
         await using var cache = new ContextRetrieverClientCache(new ContextRetrieverClientFactory());
         var provider = new RedisContextRetrieverProvider(resolver, cache);
@@ -97,7 +96,7 @@ public sealed class ManagedContextRetrieverLiveTests
 
         var authorizedFilter = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["tag_conditions"] = new[] { new { field = "traveler_id", value = user.TravelerId.Replace("-", "") } },
+            ["tag_conditions"] = new[] { new { field = "traveler_id", value = user.TravelerId } },
         });
         var filteredResult = await filter.InvokeAsync(authorizedFilter);
         Assert.NotNull(filteredResult);
