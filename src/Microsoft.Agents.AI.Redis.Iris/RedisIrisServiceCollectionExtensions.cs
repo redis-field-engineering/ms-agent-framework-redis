@@ -36,6 +36,8 @@ public sealed class RedisIrisAgentMemoryOptions
     public string? Credential { get; set; }
     /// <summary>Gets or sets a rotating credential provider instead of <see cref="Credential"/>.</summary>
     public IAgentMemoryCredentialProvider? CredentialProvider { get; set; }
+    /// <summary>Gets or sets a user JWT provider. When configured, every request requires a valid delegated token.</summary>
+    public IAgentMemoryDelegatedTokenProvider? DelegatedTokenProvider { get; set; }
     /// <summary>Gets or sets the required identity resolver, including tenant, owner, session, actor, agent, namespace, and topics.</summary>
     public Func<AgentSession?, RedisIrisIdentityContext>? IdentityResolver { get; set; }
     /// <summary>Gets or sets the required host authorization callback for resolved identities.</summary>
@@ -72,11 +74,13 @@ public static class RedisIrisServiceCollectionExtensions
         var clientOptions = new RedisAgentMemoryClientOptions { Endpoint = options.Endpoint!, StoreId = options.StoreId! };
         services.AddSingleton(options);
         services.AddSingleton(credentialProvider);
-        services.AddHttpClient("Redis.Iris.AgentMemory", client => client.BaseAddress = options.Endpoint);
+        services.AddHttpClient("Redis.Iris.AgentMemory", client => client.BaseAddress = options.Endpoint)
+            .RedactLoggedHeaders(["Authorization", "X-Iris-User-Token"]);
         services.AddSingleton<IRedisAgentMemoryClient>(provider => new RedisAgentMemoryClient(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient("Redis.Iris.AgentMemory"),
             clientOptions,
-            credentialProvider));
+            credentialProvider,
+            options.DelegatedTokenProvider));
         services.AddSingleton<RedisIrisMessageMapper>();
         services.AddSingleton<RedisIrisLongTermMemorySearch>();
         services.AddSingleton(provider => new RedisIrisSessionEventWriter(

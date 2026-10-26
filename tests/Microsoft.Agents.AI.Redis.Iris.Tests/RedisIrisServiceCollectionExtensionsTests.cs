@@ -36,6 +36,26 @@ public sealed class RedisIrisServiceCollectionExtensionsTests
         Assert.DoesNotContain("test-secret", exception.Message);
     }
 
+    [Fact]
+    public async Task RegistrationWiresDelegationAndRedactsBothCredentials()
+    {
+        var services = new ServiceCollection();
+        services.AddRedisIrisAgentMemory(options =>
+        {
+            Valid(options, true);
+            options.DelegatedTokenProvider = new FixedAgentMemoryDelegatedTokenProvider(
+                new("expired-user-token", DateTimeOffset.UtcNow.AddMinutes(-1)));
+        });
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IRedisAgentMemoryClient>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => client.DeleteSessionMemoryAsync("session"));
+        var options = provider.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.Extensions.Http.HttpClientFactoryOptions>>()
+            .Get("Redis.Iris.AgentMemory");
+        Assert.True(options.ShouldRedactHeaderValue("Authorization"));
+        Assert.True(options.ShouldRedactHeaderValue("X-Iris-User-Token"));
+    }
+
     private static void Valid(RedisIrisAgentMemoryOptions options, bool useHistory)
     {
         options.Endpoint = new("https://memory.example.test");

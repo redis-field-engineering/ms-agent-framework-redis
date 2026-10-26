@@ -1,0 +1,128 @@
+RAM delegated JWT connector implementation plan
+
+Prepared October 26, 2026, after previous integration changes were committed and
+pushed as 236f312. The connector, DevUI, setup opt-in, and tests are now implemented
+on codex/ram-delegated-jwt. All 119 unit tests pass. The user confirmed that the
+real Cognito sign-in and preferred-seat/name/home-airport query succeeded against
+the new deployment. The app log contains two RAM session initializations and no
+failure entries or RAM HTTP errors. The automated two-user signed-token suite
+and asynchronous promotion verification remain pending. The infrastructure agent has deployed an isolated
+RAM 0.10.2 instance and dedicated store on local port 9002 because the existing
+bootstrap key cannot be migrated unchanged. Ownership enforcement is on there;
+known personal reads without JWT return 404, personal writes without JWT return
+403, and invalid user JWTs return 401. The DevUI now runs against that instance.
+Infrastructure context is in gke-ram-jwt-handoff.txt. The implementation plan
+below records the design and validation obligations, not completed live checks.
+
+Agreed initial integration contract
+
+- Primary credential: existing RAM agent key in Authorization: Bearer.
+- Delegated credential: current Cognito access JWT in X-Iris-User-Token.
+- RAM user claim: sub. The signed subject becomes the personal owner.
+- RAM resolves the single infrastructure account as "1". The DevUI's existing
+  logical tenant/traveler identity and CR claim mapping remain intact.
+- Reuse the existing access-token audience through RAM's delegation audience.
+- New sessions use sub ownership. Existing composite-owner data is preserved;
+  do not fall back to reading it with an unscoped service credential.
+- JWT mode is opt-in. Existing service-key callers and Cloud profiles retain
+  their current behavior unless the server's ownership policy changes.
+
+1. Low-level RAM API
+
+In src/Redis.Iris.AgentMemory add an independent delegated-token value and
+IAgentMemoryDelegatedTokenProvider abstraction, with expiry metadata and a fixed
+provider for tests/explicit-token clients. Keep ASP.NET and Cognito dependencies
+out of the low-level package. Reject empty/expired token values and avoid secret
+exposure through generated ToString, logging, exceptions, or telemetry.
+
+Keep IAgentMemoryCredentialProvider unchanged. Preserve the existing public
+three-argument RedisAgentMemoryClient constructor for binary/source compatibility;
+add an overload for the optional delegated-token provider. Resolve tokens per
+request in CreateRequestAsync, putting the user JWT on that HttpRequestMessage,
+never HttpClient.DefaultRequestHeaders. Do not cache one user's JWT on the
+singleton client. When a provider is configured, missing identity/token or token
+expiry must fail before sending; never retry with the user header omitted.
+
+Every endpoint, including deletes and the DevUI RAM dashboard, must use the same
+request path. Retain cancellation and service error behavior. Include the new
+header in any HTTP header-redaction configuration used by the integration.
+
+2. Agent Framework composition
+
+Expose optional DelegatedTokenProvider on RedisIrisAgentMemoryOptions in
+src/Microsoft.Agents.AI.Redis.Iris/RedisIrisServiceCollectionExtensions.cs and
+pass it to the low-level client. Maintain existing registrations and host policy.
+
+Preserve server-owner filters and history owner checks. Do not replace those
+checks with token forwarding alone. Review session-state reuse so a session's
+stored owner cannot be used by a different request principal.
+
+3. DevUI adapter and ownership
+
+Refactor the existing authenticated access-token lookup in TravelUserSecurity.cs
+into a shared internal helper, or adapt it without duplicating its cookie-ticket
+and expiry checks. Keep the RAM and CR public package abstractions independent.
+Retrieve tokens from the validated server-side authentication ticket each time.
+No new login page, Cognito SDK, raw-token logging, or password storage is needed.
+
+Add an explicit RAM delegated-auth configuration switch, proposed
+REDIS_IRIS_RAM_DELEGATED_AUTH=true, default false. Require OIDC mode and the token
+provider at startup when enabled. Retain current reauthentication-on-expiry
+behavior; do not introduce silent service-key fallback or promise refresh support.
+
+When enabled, derive RAM owner from the validated Cognito subject (sub), validate
+the service's owner-ID constraints, and use it consistently in RamIdentityResolver,
+host authorization, history, recall, dashboard listing, and clear/delete routes.
+Keep logical tenant/traveler isolation for CR and Agent Framework sessions.
+
+RedisIrisSessionEventWriter already maps USER event actorId from state.OwnerId,
+not the display/traveler actor. Preserve that wire behavior and verify new-session
+ownership with sub. Do not blindly overwrite assistant/tool actors. Start fresh
+agent sessions when changing ownership mode. Old personal memories stay under
+their existing composite IDs and need a separate explicit migration if desired.
+
+4. Configuration and documentation
+
+After the infrastructure handoff, consume the tested RAM endpoint/store/key
+through ignored private profiles. Add an explicit opt-in to Kubernetes Cognito
+setup; rerunning setup must not silently turn off an already selected mode or
+restore stale keys. Do not enable against an unsupported service build.
+
+Document two credentials, token lifetime, required server features, sub ownership,
+the single-account tenant mapping, and the transition from existing demo data.
+Explain that service-key examples without user context cannot create personal
+records on a data plane with ownership enforcement enabled. Keep Cloud defaults.
+
+5. Validation
+
+- HTTP contract tests: agent and user headers coexist on all request families;
+  per-request token changes and concurrent users do not cross-contaminate;
+  missing/expired tokens fail before network I/O; no fallback on 401/403;
+  existing three-argument/key-only clients remain compatible.
+- DI/provider tests: opt-in wiring and existing owner/session isolation.
+- DevUI tests: validated sub selects the RAM owner; session/tenant boundaries;
+  no authenticated ticket, expired token, and invalid configuration fail closed;
+  key-only mode preserves its existing composite ownership.
+- Live tests: a dedicated delegated-JWT suite or explicit mode with a fresh,
+  ignored two-user bundle. Existing tests generate random actor/owner IDs and
+  cannot simply be rerun unchanged under enforced JWT ownership. Use the actual
+  two subjects, unique session/memory IDs, and clean up only test-created data.
+- Verify own create/read/history-reconstruction/search, foreign-ID denial,
+  forged-owner rejection, missing/invalid/expired JWT behavior, and unchanged CR
+  isolation. Include a real DevUI interaction and worker/promotion verification.
+- Run the repository formatting/build/test/package gate. Report skipped live
+  checks accurately; never use unsigned tokens to claim service validation.
+
+6. Cutover dependency
+
+The infrastructure task stages a compatible deployment with delegation enabled
+but ownership enforcement off until this connector and the smoke authentication
+path are ready. Coordinate the enforcement change, then perform signed two-user
+verification. A staged configuration alone is not completed authorization.
+
+Current-source finding that supersedes the older ticket description: newer
+ownership_policy.go denies personal access without UserID; it does not retain
+legacy unrestricted personal access in that case. The delegation middleware
+itself still allows requests without the header to proceed to authorization.
+The cluster's existing smoke probe uses an unbound agent key and actor iris-smoke,
+so it needs an explicit supported workload path before enforcement is enabled.

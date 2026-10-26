@@ -63,6 +63,7 @@ var otlpEndpoint = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
 var travelContextModel = TravelContext.Model;
 var authenticationMode = TravelAuthentication.ParseMode(builder.Configuration["DEVUI_AUTH_MODE"]);
 var oidcEnabled = authenticationMode == TravelAuthenticationMode.OpenIdConnect;
+var ramDelegatedAuth = ParseBoolean(builder.Configuration, "REDIS_IRIS_RAM_DELEGATED_AUTH", false);
 var userDirectory = oidcEnabled
     ? TravelUserDirectory.Parse(null)
     : TravelUserDirectory.Load(
@@ -114,7 +115,7 @@ var legacyUser = new TravelUser(
     ContextRetrieverDelegatedTokenVersion: null,
     ContextRetrieverDelegatedTokenExpiresAt: null);
 var httpContextAccessor = new HttpContextAccessor();
-var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser, authenticationMode);
+var userAccessor = new TravelUserAccessor(httpContextAccessor, userDirectory, legacyUser, authenticationMode, ramDelegatedAuth);
 var delegatedTokenProvider = new TravelDelegatedTokenProvider(userAccessor);
 var identityResolver = new RamIdentityResolver(userAccessor);
 
@@ -180,6 +181,7 @@ builder.Services.AddRedisIrisAgentMemory(options =>
     options.Endpoint = new Uri(endpoint);
     options.StoreId = storeId;
     options.Credential = irisApiKey;
+    options.DelegatedTokenProvider = ramDelegatedAuth ? new TravelRamDelegatedTokenProvider(userAccessor) : null;
     options.IdentityResolver = identityResolver.Resolve;
     options.AuthorizationPolicy = identity =>
     {
