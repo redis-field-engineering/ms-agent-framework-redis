@@ -13,8 +13,11 @@ public sealed class ContextCtlSurfaceDeployerTests
 
         var result = await deployer.CreateAsync(model, new()
         {
-            Name = "travel-surface", RedisAddress = "redis.example:6380", RedisTls = true,
-            RedisUsername = "app", RedisPassword = "redis-secret",
+            Name = "travel-surface",
+            RedisAddress = "redis.example:6380",
+            RedisTls = true,
+            RedisUsername = "app",
+            RedisPassword = "redis-secret",
         });
 
         Assert.Equal("surface-1", result.SurfaceId);

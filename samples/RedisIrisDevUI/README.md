@@ -6,6 +6,11 @@ The hosted agent uses Agent Framework's in-memory session store so each DevUI co
 
 ## Run
 
+For the existing Iris GKE cluster, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
+The native runner defaults to Redis Cloud in `.env.local`; set
+`REDIS_IRIS_ENV_FILE=secrets/iris-k8s.env` to select Kubernetes. That profile runs on the host
+through loopback port forwards and provisions its own travel surface and user keys.
+
 Add `OPENAI_API_KEY` to the repository root `.env.local`, then run:
 
 ```bash
@@ -108,6 +113,10 @@ When this setting contains at least two users, the sample enables cookie authent
 Sign out before testing the second traveler. The provisioned keys are distinct and carry different `traveler_id` access tags. For a deployable delegated-JWT example backed by Cognito, see [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md). Runtime application instances should never receive Context Retriever administrative credentials.
 
 ## Optional Cognito delegated-JWT mode
+
+For Context Retriever running in GKE, use the [Kubernetes Cognito profile](../../docs/kubernetes-samples.md#reuse-cognito-for-the-gke-context-retriever).
+It reuses the same pool and DevUI OIDC flow, configures the GKE travel surface,
+and keeps RAM on its existing Kubernetes service key.
 
 The development sign-in-token flow above remains the default. To exercise real delegated JWT authorization instead, deploy [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md), configure the Context Retriever surface to trust the emitted issuer/JWKS/audience, and add the following non-secret Terraform outputs to `.env.local`:
 

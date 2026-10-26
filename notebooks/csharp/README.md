@@ -2,10 +2,15 @@
 
 These Jupyter notebooks demonstrate the Redis Iris Agent Memory integration from the data plane up through Microsoft Agent Framework.
 
+For the existing self-managed deployment, complete [Kubernetes sample setup](../../docs/kubernetes-samples.md)
+and keep the port forwards running. Both notebooks default to Redis Cloud in
+`.env.local`. Set `REDIS_IRIS_ENV_FILE` to the absolute path of
+`secrets/iris-k8s-settings.json` before starting the kernel to select Kubernetes.
+
 ## Prerequisites
 
 1. Install a Jupyter client with a C# kernel, such as the VS Code Polyglot Notebooks extension or the .NET Interactive Jupyter kernel.
-2. Ensure the repository root `.env.local` contains:
+2. Configure Kubernetes as above, or ensure the repository root `.env.local` contains:
 
    ```dotenv
    REDIS_IRIS_ENDPOINT="https://..."

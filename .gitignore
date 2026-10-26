@@ -5,6 +5,8 @@ artifacts/
 .env
 .env.local
 .env.*.local
+secrets/
+__pycache__/
 *.user
 *.suo
 .DS_Store

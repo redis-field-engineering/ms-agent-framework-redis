@@ -13,6 +13,12 @@ The first project covers provider unit and composition behavior. The second cove
 
 The Context Retriever live suite uses `REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT` plus the scoped credential bundle generated at `artifacts/context-retriever/redis-iris-travel-users.json`. Override the bundle location with `REDIS_IRIS_CONTEXT_RETRIEVER_USERS_FILE`. It verifies two-user server-side ACL isolation, cross-traveler get-by-ID denial, trusted traveler-ID injection, model-visible schema hardening, and rejection of authorization-field substitution. The suite is read-only and skips cleanly until the endpoint and credential bundle are available.
 
+The suite accepts either a per-traveler agent-key array or the shared-key bundle
+with delegated JWTs. For the self-managed cluster, follow
+[Kubernetes sample setup](docs/kubernetes-samples.md), then `source secrets/iris-k8s.env`
+before running the two live projects. That profile supplies both service endpoints
+and the Kubernetes-specific user bundle without loading the Cloud configuration.
+
 The managed suite verifies multi-role event ordering, individual-event retrieval and deletion, session deletion, Agent Framework history persistence and reconstruction after provider recreation, owner-scoped long-term-memory search, owner isolation, and rejection of invalid bearer credentials. Every mutable test uses unique synthetic identifiers and cleans up its session. It deliberately does not assert immediate promotion: managed promotion is eventually consistent, and promoted records require a separate explicit LTM cleanup capability before a repeatable promotion test can safely create them.
 
 Before merging:

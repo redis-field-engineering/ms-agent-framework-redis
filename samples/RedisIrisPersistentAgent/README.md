@@ -9,7 +9,11 @@ Redis Agent Memory provides both Agent Framework extension points:
 
 ## Configuration
 
-The repository root `.env.local` already holds the Redis Cloud values. Add the model credential and, optionally, a stable demo owner:
+For the existing self-managed GKE deployment, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
+The runner defaults to Redis Cloud in `.env.local`.
+Set `REDIS_IRIS_ENV_FILE=secrets/iris-k8s.env` to select Kubernetes explicitly.
+
+For Redis Cloud, the repository root `.env.local` holds the connection values. Add the model credential and, optionally, a stable demo owner:
 
 ```dotenv
 REDIS_IRIS_ENDPOINT="https://..."
@@ -33,7 +37,7 @@ Teach the preference and demonstrate same-session durability:
 ./scripts/run-agent-memory-demo.sh teach
 ```
 
-Redis Cloud promotes session events asynchronously. After at least one five-minute promotion window, demonstrate recall in a completely new session:
+Redis Agent Memory promotes session events asynchronously. After a promotion window (depending on the service configuration), demonstrate recall in a completely new session:
 
 ```bash
 ./scripts/run-agent-memory-demo.sh recall

@@ -47,8 +47,8 @@ if (command is "teach" or "full")
 
 if (command == "full")
 {
-    Console.WriteLine("Waiting for Redis Cloud's asynchronous memory promotion worker.");
-    Console.WriteLine($"This can take a five-minute promotion window plus model processing (timeout: {promotionTimeout.TotalMinutes:F0} minutes).\n");
+    Console.WriteLine("Waiting for Redis Agent Memory's asynchronous promotion worker.");
+    Console.WriteLine($"Timing depends on the service's extraction cadence and model processing (timeout: {promotionTimeout.TotalMinutes:F0} minutes).\n");
     await WaitForPromotionAsync();
 }
 
@@ -85,7 +85,7 @@ async Task TeachAndResumeAsync()
         }
     }
 
-    Console.WriteLine("Session A is durable. For a presentation, wait at least five minutes, then run this sample in 'recall' mode.\n");
+    Console.WriteLine("Session A is durable. After the service's promotion window, run this sample in 'recall' mode.\n");
 }
 
 async Task RecallInNewSessionAsync()

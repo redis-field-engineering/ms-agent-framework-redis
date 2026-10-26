@@ -9,6 +9,7 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 - [Integration design](INTEGRATION_DESIGN.md)
 - [Product requirements and story backlog](tasks/prd-redis-iris-ms-agent-framework-integration.md)
 - [Local integration environment](LOCAL_DEVELOPMENT.md)
+- [Run samples against the Iris Kubernetes cluster](docs/kubernetes-samples.md)
 - [Security model](SECURITY.md)
 - [Observability](OBSERVABILITY.md)
 - [Context Retriever integration](docs/context-retriever.md)
@@ -29,7 +30,7 @@ Milestones 1–3 implement the .NET Agent Memory client and Agent Framework prov
 | --- | --- |
 | .NET | 8.0 LTS |
 | Microsoft Agent Framework | 1.23.x |
-| Redis Agent Memory | Managed `/v1` data plane |
-| Redis Context Retriever | Managed local MCP endpoint |
+| Redis Agent Memory | Managed or self-managed `/v1` data plane |
+| Redis Context Retriever | Managed MCP or self-managed 0.4.2 over loopback |
 
 The connector intentionally pins Agent Framework 1.23.0 for reproducible builds. New minor versions must pass the complete quality gate before this matrix is updated.

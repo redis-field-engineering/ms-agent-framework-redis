@@ -2,9 +2,14 @@
 
 ## Decision
 
-Redis Agent Memory and Redis Context Retriever run as managed Redis Cloud services. Everything owned by this repository runs locally in Docker Compose.
+The native samples can use the existing self-managed Iris GKE cluster through
+loopback port forwards; see [Kubernetes sample setup](docs/kubernetes-samples.md).
+The native runners default to the Redis Cloud settings in `.env.local`;
+select the Kubernetes profile explicitly with `REDIS_IRIS_ENV_FILE`.
 
-Self-managed Iris deployments are not part of the default developer environment. They may be added later as optional compatibility tests, but local Kubernetes is not required for normal development or CI.
+The Docker Compose environment described below uses managed Redis Cloud services
+and `.env.local`. No local Kubernetes cluster is required for normal development
+or CI.
 
 ## Topology
 
