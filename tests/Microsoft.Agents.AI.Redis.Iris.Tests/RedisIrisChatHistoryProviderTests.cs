@@ -135,6 +135,43 @@ public sealed class RedisIrisChatHistoryProviderTests
         Assert.Equal(2, client.Added.Select(static request => request.ActorId).Distinct().Count());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SummaryIsBoundedUntrustedContextBeforeRecentEvents(bool includeSummary)
+    {
+        var client = new RecordingClient
+        {
+            Memory = new("session", "owner", [Event("recent", "session", "owner", SessionEventRole.USER, "recent event", 1)],
+                Summary: new("older context that is long", "old", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { }), 20)),
+        };
+        var provider = new RedisIrisChatHistoryProvider(client, _ => new("session", "owner", "agent"),
+            options: new() { IncludeSessionSummary = includeSummary, MaxSummaryCharacters = 5, MaxMessagesToRetrieve = 1 });
+        var messages = (await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "current")]))).ToList();
+        Assert.Equal(includeSummary ? 3 : 2, messages.Count);
+        if (includeSummary)
+        {
+            Assert.Equal(ChatRole.User, messages[0].Role);
+            Assert.Contains("untrusted remembered context", messages[0].Text);
+            Assert.EndsWith("older", messages[0].Text);
+            Assert.True((bool)messages[0].AdditionalProperties!["redis.iris.summary"]!);
+        }
+        Assert.Equal("recent event", messages[^2].Text);
+        Assert.Equal("current", messages[^1].Text);
+    }
+
+    [Fact]
+    public async Task SummaryOnlySessionStillProvidesHistoricalContext()
+    {
+        var client = new RecordingClient
+        {
+            Memory = new("session", "owner", [],
+            Summary: new("earlier facts", "old", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { }), 20))
+        };
+        var provider = Provider(client, new("session", "owner", "agent"));
+        Assert.Contains("earlier facts", Assert.Single(await provider.InvokingAsync(new(s_agent, null, []))).Text);
+    }
+
     private static RedisIrisChatHistoryProvider Provider(RecordingClient client, RedisIrisProviderState state, int? maxMessages = null) =>
         new(client, _ => state, options: new() { MaxMessagesToRetrieve = maxMessages });
 
