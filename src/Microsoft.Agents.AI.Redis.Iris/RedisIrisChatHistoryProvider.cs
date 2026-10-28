@@ -115,9 +115,10 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
             return [];
         }
 
-        if (!string.Equals(memory.OwnerId, state.OwnerId, StringComparison.Ordinal))
+        if (!string.Equals(memory.OwnerId, state.OwnerId, StringComparison.Ordinal) ||
+            state.NamespaceId is not null && memory.NamespaceRef?.Id != state.NamespaceId)
         {
-            throw new UnauthorizedAccessException("The Redis Agent Memory session belongs to a different owner.");
+            throw new UnauthorizedAccessException("The Redis Agent Memory session belongs to a different owner or namespace.");
         }
 
         IEnumerable<SessionEvent> events = memory.Events.OrderBy(static item => item.CreatedAt).ThenBy(static item => item.SystemTimestamp);

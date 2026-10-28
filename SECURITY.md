@@ -43,3 +43,9 @@ mapping to account `1` applies only to its single-account deployment.
 ## Agent Memory transport
 
 Production endpoints require HTTPS; plain HTTP is accepted only on loopback for development. The DI registration disables automatic redirects and cookies. Applications supplying their own `HttpClient` must also set `AllowAutoRedirect = false` and `UseCookies = false` on its handler: .NET can forward custom headers, including `X-Iris-User-Token`, across redirects. The connector cannot inspect an arbitrary caller-owned handler pipeline.
+
+## Tenant, namespace, and topic scope
+
+Resolved namespace IDs are carried to session writes and recall filters; history reads verify the returned namespace. Resolved topics constrain recall with an all-topics filter, intersected with configured filters. RAM session events have no topic field, so this does not assign topics to extracted memories. Tenant, namespace, and topic identity are rechecked against persisted session state on every operation. Previously serialized state without these bindings must be recreated by the trusted host after authorizing the session.
+
+RAM has no tenant filter in these operations. `TenantId` binds host authorization to a session; it does not create a server-side partition. In a shared store, use globally unique owner IDs and/or distinct authorized namespace resources for tenants. Never rely on identical owner IDs plus different `TenantId` strings alone. For delegated RAM, owner IDs must remain the validated JWT subject; use namespaces or separate stores for additional tenant boundaries.

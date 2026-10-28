@@ -31,4 +31,13 @@ public sealed class RedisIrisProviderState
 
     /// <summary>Gets the stable agent actor identifier.</summary>
     public string AgentId { get; }
+    /// <summary>Gets the host tenant bound to this session; tenant is not a RAM wire-level filter.</summary>
+    public string? TenantId { get; init; }
+
+    /// <summary>Gets the trusted namespace resource ID used for event placement and recall.</summary>
+    public string? NamespaceId { get; init; }
+
+    /// <summary>Gets the required topics for recall. Session events do not support topic placement.</summary>
+    public IReadOnlyList<string> Topics { get; init; } = [];
+
 }

@@ -65,6 +65,7 @@ public sealed class RedisIrisSessionEventWriter
                 continue;
             }
 
+            request = request with { NamespaceRef = state.NamespaceId is null ? null : new(state.NamespaceId) };
             await this._client.AddSessionEventAsync(request, cancellationToken).ConfigureAwait(false);
             count++;
         }

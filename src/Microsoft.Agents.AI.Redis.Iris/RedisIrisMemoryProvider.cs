@@ -84,9 +84,10 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
         var state = this._sessionState.GetOrInitializeState(context.Session);
         this._stateValidator?.Invoke(context.Session, state);
         var requestMessages = context.RequestMessages.ToList();
+        var searchOptions = ApplyScope(state, this._options.Search);
         try
         {
-            var result = await this._search.SearchAsync(state.OwnerId, requestMessages, this._options.Search, cancellationToken).ConfigureAwait(false);
+            var result = await this._search.SearchAsync(state.OwnerId, requestMessages, searchOptions, cancellationToken).ConfigureAwait(false);
             this._logger?.LogInformation("Redis Iris recall returned {MemoryCount} memory record(s).", result.Items.Count);
             if (result.Items.Count == 0)
             {
@@ -133,6 +134,21 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
             this._logger?.LogWarning(exception, "Redis Iris memory recall failed; continuing without recalled context.");
             return [];
         }
+    }
+
+    private static RedisIrisMemorySearchOptions ApplyScope(RedisIrisProviderState state, RedisIrisMemorySearchOptions configured)
+    {
+        if (state.NamespaceId is not null && (configured.Unnamespaced == true ||
+            configured.NamespaceRef?.Eq is { } configuredNamespace && configuredNamespace != state.NamespaceId))
+            throw new UnauthorizedAccessException("Configured recall filters conflict with the authorized namespace.");
+
+        return configured with
+        {
+            NamespaceRef = state.NamespaceId is null ? configured.NamespaceRef :
+                (configured.NamespaceRef ?? new()) with { Eq = state.NamespaceId },
+            Topics = state.Topics.Count == 0 ? configured.Topics :
+                (configured.Topics ?? new()) with { All = (configured.Topics?.All ?? []).Concat(state.Topics).Distinct(StringComparer.Ordinal).ToArray() },
+        };
     }
 
     /// <inheritdoc />
