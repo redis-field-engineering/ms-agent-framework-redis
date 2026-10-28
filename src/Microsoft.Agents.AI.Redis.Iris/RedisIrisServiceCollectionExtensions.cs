@@ -98,7 +98,12 @@ public static class RedisIrisServiceCollectionExtensions
                 throw new UnauthorizedAccessException("The host application denied the resolved Redis Iris identity.");
             }
 
-            return new(identity.SessionId, identity.OwnerId, identity.AgentId, identity.ActorId);
+            return new(identity.SessionId, identity.OwnerId, identity.AgentId, identity.ActorId)
+            {
+                TenantId = identity.TenantId,
+                NamespaceId = identity.NamespaceId,
+                Topics = identity.Topics?.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray() ?? [],
+            };
         };
 
         void ValidateCurrentIdentity(AgentSession? session, RedisIrisProviderState persisted)
@@ -106,7 +111,9 @@ public static class RedisIrisServiceCollectionExtensions
             // Session state locates data; it never grants permission to the current caller.
             var current = stateInitializer(session);
             if (current.SessionId != persisted.SessionId || current.OwnerId != persisted.OwnerId ||
-                current.AgentId != persisted.AgentId || current.ActorId != persisted.ActorId)
+                current.AgentId != persisted.AgentId || current.ActorId != persisted.ActorId ||
+                current.TenantId != persisted.TenantId || current.NamespaceId != persisted.NamespaceId ||
+                !current.Topics.SequenceEqual(persisted.Topics ?? []))
             {
                 throw new UnauthorizedAccessException("The current identity does not match the Redis Iris session.");
             }
@@ -188,7 +195,9 @@ public static class RedisIrisServiceCollectionExtensions
             string.IsNullOrWhiteSpace(identity.OwnerId) ||
             string.IsNullOrWhiteSpace(identity.SessionId) ||
             string.IsNullOrWhiteSpace(identity.ActorId) ||
-            string.IsNullOrWhiteSpace(identity.AgentId))
+            string.IsNullOrWhiteSpace(identity.AgentId) ||
+            identity.NamespaceId is not null && string.IsNullOrWhiteSpace(identity.NamespaceId) ||
+            identity.Topics?.Any(string.IsNullOrWhiteSpace) == true)
         {
             throw new UnauthorizedAccessException("The trusted identity resolver returned an incomplete identity.");
         }

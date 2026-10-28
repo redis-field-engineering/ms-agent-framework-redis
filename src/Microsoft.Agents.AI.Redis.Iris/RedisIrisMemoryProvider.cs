@@ -84,9 +84,10 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
         var state = this._sessionState.GetOrInitializeState(context.Session);
         this._stateValidator?.Invoke(context.Session, state);
         var requestMessages = context.RequestMessages.ToList();
+        var searchOptions = ApplyScope(state, this._options.Search);
         try
         {
-            var result = await this._search.SearchAsync(state.OwnerId, requestMessages, this._options.Search, cancellationToken).ConfigureAwait(false);
+            var result = await this._search.SearchAsync(state.OwnerId, requestMessages, searchOptions, cancellationToken).ConfigureAwait(false);
             this._logger?.LogInformation("Redis Iris recall returned {MemoryCount} memory record(s).", result.Items.Count);
             if (result.Items.Count == 0)
             {
@@ -133,6 +134,42 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
             this._logger?.LogWarning(exception, "Redis Iris memory recall failed; continuing without recalled context.");
             return [];
         }
+    }
+
+    private static RedisIrisMemorySearchOptions ApplyScope(RedisIrisProviderState state, RedisIrisMemorySearchOptions configured)
+    {
+        var ns = configured.NamespaceRef;
+        if (state.NamespaceId is { } authorizedNamespace)
+        {
+            ValidateSingleOperator(ns);
+            if (configured.Unnamespaced == true ||
+                ns?.Eq is { } eq && eq != authorizedNamespace ||
+                ns?.Ne == authorizedNamespace ||
+                ns?.In is { } any && !any.Contains(authorizedNamespace, StringComparer.Ordinal) ||
+                ns?.All is { } all && all.Any(value => value != authorizedNamespace))
+                throw new UnauthorizedAccessException("Configured recall filters conflict with the authorized namespace.");
+            ns = new() { Eq = authorizedNamespace };
+        }
+
+        var topics = configured.Topics;
+        if (state.Topics.Count > 0)
+        {
+            ValidateSingleOperator(topics);
+            // RAM accepts one operator per field. An all-topics condition cannot express
+            // an additional exclusion or a disjunction not already implied by the required topics.
+            if (topics?.Ne is not null || topics?.In is { Count: not 1 } choices &&
+                !choices.Intersect(state.Topics, StringComparer.Ordinal).Any())
+                throw new UnauthorizedAccessException("Configured topic filters cannot be combined with required topics.");
+            var additional = topics?.All ?? (topics?.Eq is { } topic ? [topic] : topics?.In is { Count: 1 } single ? single : []);
+            topics = new() { All = state.Topics.Concat(additional).Distinct(StringComparer.Ordinal).ToArray() };
+        }
+        return configured with { NamespaceRef = ns, Topics = topics };
+    }
+
+    private static void ValidateSingleOperator(StringFilter? filter)
+    {
+        if (filter is not null && new[] { filter.Eq is not null, filter.Ne is not null, filter.In is not null, filter.All is not null }.Count(value => value) != 1)
+            throw new UnauthorizedAccessException("A scoped recall filter must specify exactly one operator.");
     }
 
     /// <inheritdoc />
