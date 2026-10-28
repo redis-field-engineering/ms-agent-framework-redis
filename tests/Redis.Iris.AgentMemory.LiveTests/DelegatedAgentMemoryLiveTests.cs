@@ -12,7 +12,7 @@ public sealed class DelegatedAgentMemoryLiveTests
     public async Task SignedUsersAreIsolatedOnSessionReadsListsWritesAndDeletes()
     {
         var users = LoadUsers();
-        using var http = new HttpClient();
+        using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var clients = users.Select(user => Client(http, user)).ToArray();
         var sessions = users.Select(_ => "dotnet-jwt-" + Guid.NewGuid().ToString("N")).ToArray();
         var forgedSession = "dotnet-jwt-forged-" + Guid.NewGuid().ToString("N");
@@ -57,7 +57,7 @@ public sealed class DelegatedAgentMemoryLiveTests
     public async Task PersonalSessionCannotBeAccessedWithoutAValidDelegatedToken()
     {
         var user = LoadUsers()[0];
-        using var http = new HttpClient();
+        using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         var client = Client(http, user);
         var session = "dotnet-jwt-auth-" + Guid.NewGuid().ToString("N");
         try

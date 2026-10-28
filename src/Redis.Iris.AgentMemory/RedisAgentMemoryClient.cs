@@ -60,7 +60,6 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         this._delegatedTokenProvider = delegatedTokenProvider;
         this._endpoint = options.Endpoint;
         this._storePath = $"v1/stores/{Uri.EscapeDataString(options.StoreId)}";
-        this._httpClient.BaseAddress ??= EnsureTrailingSlash(options.Endpoint);
     }
 
     /// <inheritdoc />
@@ -307,7 +306,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             delegatedToken.Validate();
         }
 
-        var request = new HttpRequestMessage(method, path);
+        var request = new HttpRequestMessage(method, new Uri(EnsureTrailingSlash(this._endpoint), path));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
         if (delegatedToken is not null)
         {
