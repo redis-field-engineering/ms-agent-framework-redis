@@ -11,6 +11,7 @@ Start with the [standalone .NET quickstart](docs/quickstart.md). Public publicat
 - [Local integration environment](LOCAL_DEVELOPMENT.md)
 - [Run samples against the Iris Kubernetes cluster](docs/kubernetes-samples.md)
 - [Security model](SECURITY.md)
+- [Preview guarantees and limitations](docs/operational-contract.md)
 - [Observability](OBSERVABILITY.md)
 - [Context Retriever integration](docs/context-retriever.md)
 - [Context Retriever POCO modeling](docs/context-retriever-modeling.md)

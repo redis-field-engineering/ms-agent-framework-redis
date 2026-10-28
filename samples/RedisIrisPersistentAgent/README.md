@@ -49,13 +49,13 @@ For an unattended end-to-end run, including bounded polling for promotion:
 ./scripts/run-agent-memory-demo.sh full
 ```
 
-Every new RAM session prints the trusted user/owner ID and generated session ID before the agent writes any events. To remove all session history and promoted long-term memories owned by that demo user:
+Every new RAM session prints the trusted user/owner ID and generated session ID before the agent writes any events. To run best-effort cleanup of session history and currently discoverable promoted memories owned by that synthetic demo user:
 
 ```bash
 ./scripts/run-agent-memory-demo.sh clear
 ```
 
-`clear` is owner-scoped to `SAMPLE_OWNER_ID`; it does not delete records belonging to other users in the store.
+`clear` is owner-scoped to `SAMPLE_OWNER_ID`. It is a demo cleanup helper, not complete erasure: background extraction may finish after cleanup, and partial deletion errors or search limits require follow-up. See the [preview operational contract](../../docs/operational-contract.md).
 
 By default, the output focuses on user and assistant turns plus the memory layers. The owner scope comes from trusted application configuration rather than model-generated input.
 
@@ -75,7 +75,7 @@ The deliberately small default window of four messages makes the distinction vis
 
 ## What the demo proves
 
-1. Agent Framework request and response messages are written once to Redis Agent Memory.
+1. Supported text request and response messages are written during a normal successful invocation. Retries after ambiguous failures can duplicate events.
 2. The full durable session, optional managed summary, and bounded short-term window are separate memory views.
 3. Recreating the .NET agent does not lose the conversation; the history provider reconstructs it from Redis.
 4. Long-term search is always constrained by the trusted owner equality filter.
