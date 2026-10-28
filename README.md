@@ -2,25 +2,25 @@
 
 Redis Field Engineering’s preview .NET connectors provide durable Agent Framework history, owner-scoped memory recall, and authorized Redis Context Retriever tools. The packages are maintained by Redis Field Engineering; they are not Microsoft products.
 
-Start with the [standalone .NET quickstart](docs/quickstart.md). Public publication is gated on package validation and positive live-service evidence; a green unit-test build alone does not establish release readiness.
+Start with the [standalone .NET quickstart](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/quickstart.md). Public publication is gated on package validation and positive live-service evidence; a green unit-test build alone does not establish release readiness.
 
 ## Project documents
 
-- [Integration design](INTEGRATION_DESIGN.md)
-- [Product requirements and story backlog](tasks/prd-redis-iris-ms-agent-framework-integration.md)
-- [Local integration environment](LOCAL_DEVELOPMENT.md)
-- [Run samples against the Iris Kubernetes cluster](docs/kubernetes-samples.md)
-- [Security model](SECURITY.md)
-- [Preview guarantees and limitations](docs/operational-contract.md)
-- [Observability](OBSERVABILITY.md)
-- [Context Retriever integration](docs/context-retriever.md)
-- [Context Retriever POCO modeling](docs/context-retriever-modeling.md)
-- [Context Retriever model sample](samples/RedisIrisContextModel/README.md)
-- [Persistent .NET sample](samples/RedisIrisPersistentAgent/README.md)
-- [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
-- [C# Jupyter notebooks](notebooks/csharp/README.md)
-- [Testing and release quality gate](TESTING.md)
-- [Preview release procedure](docs/releasing.md)
+- [Integration design](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/INTEGRATION_DESIGN.md)
+- [Product requirements and story backlog](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/tasks/prd-redis-iris-ms-agent-framework-integration.md)
+- [Local integration environment](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LOCAL_DEVELOPMENT.md)
+- [Run samples against the Iris Kubernetes cluster](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/kubernetes-samples.md)
+- [Security model](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/SECURITY.md)
+- [Preview guarantees and limitations](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/operational-contract.md)
+- [Observability](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/OBSERVABILITY.md)
+- [Context Retriever integration](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/context-retriever.md)
+- [Context Retriever POCO modeling](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/context-retriever-modeling.md)
+- [Context Retriever model sample](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/samples/RedisIrisContextModel/README.md)
+- [Persistent .NET sample](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/samples/RedisIrisPersistentAgent/README.md)
+- [ASP.NET Core DevUI sample](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/samples/RedisIrisDevUI/README.md)
+- [C# Jupyter notebooks](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/notebooks/csharp/README.md)
+- [Testing and release quality gate](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/TESTING.md)
+- [Preview release procedure](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/releasing.md)
 
 ## Current status
 
@@ -42,4 +42,4 @@ The libraries target `net8.0` and can be consumed by .NET 10 applications. Tests
 
 ## License and package version
 
-This repository is licensed under [MIT](LICENSE). All four packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
+This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All four packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
