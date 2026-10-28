@@ -48,9 +48,10 @@ dotnet restore ms-agent-framework-redis.slnx
 dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
 dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
 dotnet test ms-agent-framework-redis.slnx -c Release --no-build
-dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
-dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
-./eng/validate-packages.sh artifacts
+./eng/pack.sh # destination artifacts/packages must be empty
+./eng/package-smoke.sh
 ```
 
 Nullable analysis and warnings-as-errors are repository-wide. Package validation checks that release archives contain no test credentials, captured customer data, build outputs, or test assemblies. Public API changes must be reviewed against the packages produced from the previous release before the supported-version matrix is changed.
+
+The package gate requires all four release packages at one version, validates internal dependency versions, and restores a standalone .NET 10 consumer from a fresh package cache. Source mapping restricts all connector dependencies to the newly built feed. NuGet.org supplies only external dependencies. The smoke program loads public types from all four packages.

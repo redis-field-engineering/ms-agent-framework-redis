@@ -22,9 +22,9 @@ jobs:
       - run: dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
       - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
       - run: dotnet test ms-agent-framework-redis.slnx -c Release --no-build
-      - run: dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
-      - run: dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
-      - run: ./eng/validate-packages.sh artifacts
+      - run: python3 eng/test-package-validation.py
+      - run: ./eng/pack.sh
+      - run: ./eng/package-smoke.sh
   sample-container:
     runs-on: ubuntu-latest
     steps:
