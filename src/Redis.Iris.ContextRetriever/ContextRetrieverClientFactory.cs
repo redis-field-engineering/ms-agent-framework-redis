@@ -67,9 +67,11 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         };
 
         McpClient? client = null;
+        HttpClientTransport? transport = null;
+        var ownershipTransferred = false;
         try
         {
-            var transport = CreateTransport(transportOptions);
+            transport = CreateTransport(transportOptions);
             using (var initializeActivity = ContextRetrieverDiagnostics.Start("initialize"))
             {
                 try
@@ -116,19 +118,33 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
 
             ContextRetrieverDiagnostics.ActiveConnection(1);
             var executionGate = new SemaphoreSlim(options.MaximumConcurrentToolExecutions, options.MaximumConcurrentToolExecutions);
-            return new ContextRetrieverClient(client, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
+            var connected = new ContextRetrieverClient(client, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
+            ownershipTransferred = true;
+            return connected;
         }
         catch (ContextRetrieverException)
         {
-            if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
             throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ContextRetrieverDiagnostics.Failed(connectActivity, ex);
             ContextRetrieverDiagnostics.ConnectionFailed();
-            if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
             throw new ContextRetrieverConnectionException("Context Retriever MCP connection failed.", ex);
+        }
+        finally
+        {
+            if (!ownershipTransferred)
+            {
+                // Cancellation must clean up just as failures do. Preserve the original error
+                // if a broken transport also fails during best-effort teardown.
+                try
+                {
+                    if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
+                    else if (transport is not null) await transport.DisposeAsync().ConfigureAwait(false);
+                }
+                catch { }
+            }
         }
     }
 
