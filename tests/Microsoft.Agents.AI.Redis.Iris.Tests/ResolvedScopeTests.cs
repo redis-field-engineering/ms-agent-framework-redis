@@ -31,7 +31,7 @@ public class ResolvedScopeTests
         await memory.InvokingAsync(new(Agent, session, [new(ChatRole.User, "question")]));
         await history.InvokedAsync(new(Agent, session, [new(ChatRole.User, "message")], []));
         Assert.Equal("namespace", client.Search!.Filter!.NamespaceRef!.Eq);
-        Assert.Equal(["configured", "topic"], client.Search.Filter.Topics!.All);
+        Assert.Equal(["topic", "configured"], client.Search.Filter.Topics!.All);
         Assert.Equal("namespace", client.Writes.Single().NamespaceRef!.Id);
         Assert.True(session.StateBag.TryGetValue<RedisIrisProviderState>(nameof(RedisIrisMemoryProvider), out var state));
         var restored = JsonSerializer.Deserialize<RedisIrisProviderState>(JsonSerializer.Serialize(state))!;
@@ -55,6 +55,46 @@ public class ResolvedScopeTests
             new() { Search = new() { NamespaceRef = new() { Eq = "different" } } });
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => provider.InvokingAsync(new(Agent, null, [])).AsTask());
         Assert.Null(client.Search);
+    }
+
+    [Theory]
+    [InlineData("namespace-in", true)]
+    [InlineData("namespace-ne", true)]
+    [InlineData("namespace-excluded", false)]
+    [InlineData("topic-eq", true)]
+    [InlineData("topic-in", false)]
+    [InlineData("topic-in-implied", true)]
+    [InlineData("topic-ne", false)]
+    public async Task IntersectionsUseOneOperatorOrRejectBeforeDispatch(string kind, bool allowed)
+    {
+        var client = new MemoryClient();
+        var options = kind switch
+        {
+            "namespace-in" => new RedisIrisMemorySearchOptions { NamespaceRef = new() { In = ["trusted", "other"] } },
+            "namespace-ne" => new() { NamespaceRef = new() { Ne = "other" } },
+            "namespace-excluded" => new() { NamespaceRef = new() { Ne = "trusted" } },
+            "topic-eq" => new() { Topics = new() { Eq = "billing" } },
+            "topic-in" => new() { Topics = new() { In = ["billing", "support"] } },
+            "topic-in-implied" => new() { Topics = new() { In = ["private", "support"] } },
+            _ => new() { Topics = new() { Ne = "billing" } },
+        };
+        var provider = new RedisIrisMemoryProvider(new RedisIrisLongTermMemorySearch(client),
+            _ => new("session", "owner", "agent") { NamespaceId = "trusted", Topics = ["private"] }, new() { Search = options });
+        if (!allowed)
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() => provider.InvokingAsync(new(Agent, null, [])).AsTask());
+            Assert.Null(client.Search);
+            return;
+        }
+        await provider.InvokingAsync(new(Agent, null, []));
+        Assert.Equal("trusted", client.Search!.Filter!.NamespaceRef!.Eq);
+        Assert.Null(client.Search.Filter.NamespaceRef.In);
+        Assert.Null(client.Search.Filter.NamespaceRef.Ne);
+        Assert.Contains("private", client.Search.Filter.Topics!.All!);
+        Assert.Null(client.Search.Filter.Topics.Eq);
+        Assert.Null(client.Search.Filter.Topics.In);
+        Assert.Null(client.Search.Filter.Topics.Ne);
+        if (kind == "topic-eq") Assert.Contains("billing", client.Search.Filter.Topics.All!);
     }
 
     sealed class MemoryClient : IRedisAgentMemoryClient
