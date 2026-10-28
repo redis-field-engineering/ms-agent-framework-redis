@@ -1,8 +1,8 @@
 # Redis Iris integration for Microsoft Agent Framework
 
-This internal Redis Field Engineering project defines and tracks an integration between Redis Iris and Microsoft Agent Framework.
+Redis Field Engineering’s preview .NET connectors provide durable Agent Framework history, owner-scoped memory recall, and authorized Redis Context Retriever tools. The packages are maintained by Redis Field Engineering; they are not Microsoft products.
 
-The current priority is a .NET connector for Redis Agent Memory, followed by Redis Context Retriever integration over local MCP. Python parity is planned afterward; Go is currently out of scope.
+Start with the [standalone .NET quickstart](docs/quickstart.md). Public publication is gated on package validation and positive live-service evidence; a green unit-test build alone does not establish release readiness.
 
 ## Project documents
 
