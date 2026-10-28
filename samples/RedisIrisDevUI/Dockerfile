@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY . .
 RUN dotnet restore samples/RedisIrisDevUI/RedisIrisDevUI.csproj
@@ -7,7 +7,8 @@ RUN dotnet publish samples/RedisIrisDevUI/RedisIrisDevUI.csproj \
     --no-restore \
     --output /app/publish
 
-FROM build AS context-provisioner
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS context-provisioner
+COPY --from=build /app/publish /app/publish
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends python3 python3-venv jq \
     && rm -rf /var/lib/apt/lists/* \

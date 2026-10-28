@@ -28,9 +28,12 @@ Milestones 1–3 implement the .NET Agent Memory client and Agent Framework prov
 
 | Component | Supported baseline |
 | --- | --- |
-| .NET | 8.0 LTS |
+| Build SDK | .NET 10 (selected by `global.json`; required for `.slnx`) |
+| Application runtimes | .NET 10 LTS recommended; .NET 8 compatibility tested until its November 10, 2026 end of support |
 | Microsoft Agent Framework | 1.23.x |
 | Redis Agent Memory | Managed or self-managed `/v1` data plane |
 | Redis Context Retriever | Managed MCP or self-managed 0.4.2 over loopback |
 
 The connector intentionally pins Agent Framework 1.23.0 for reproducible builds. New minor versions must pass the complete quality gate before this matrix is updated.
+
+The libraries target `net8.0` and can be consumed by .NET 10 applications. Tests run on both runtimes; install both runtimes to run the complete suite locally. The build SDK and library target framework are independent.
