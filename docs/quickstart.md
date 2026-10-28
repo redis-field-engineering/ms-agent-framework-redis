@@ -108,7 +108,7 @@ public static class IrisAgentFactory
 }
 ```
 
-Dispose the returned service provider when the owning agent/application scope ends. The example explicitly fails closed on recall errors; the library default is fail-open recall. Authorization failures always propagate. Treat summaries and recalled memories as untrusted content. For a complete model-backed application, see the [persistent sample](../samples/RedisIrisPersistentAgent/README.md).
+Dispose the returned service provider when the owning agent/application scope ends. The example explicitly fails closed on recall errors; the library default is fail-open recall. Host identity and scope validation always propagate; credential/service errors follow the configured failure policy. Treat summaries and recalled memories as untrusted content. For a complete model-backed application, see the [persistent sample](../samples/RedisIrisPersistentAgent/README.md).
 
 ## Discover Context Retriever tools
 
