@@ -34,6 +34,7 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
     private readonly RedisIrisMemoryProviderOptions _options;
     private readonly RedisIrisSessionEventWriter? _eventWriter;
     private readonly ILogger<RedisIrisMemoryProvider>? _logger;
+    private readonly Action<AgentSession?, RedisIrisProviderState>? _stateValidator;
     private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>Initializes a Redis Iris long-term-memory provider.</summary>
@@ -43,9 +44,20 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
         RedisIrisMemoryProviderOptions? options = null,
         RedisIrisSessionEventWriter? eventWriter = null,
         ILoggerFactory? loggerFactory = null)
+        : this(search, stateInitializer, options, eventWriter, loggerFactory, null) { }
+
+    /// <summary>Initializes a provider with validation of the current caller before every memory operation.</summary>
+    public RedisIrisMemoryProvider(
+        RedisIrisLongTermMemorySearch search,
+        Func<AgentSession?, RedisIrisProviderState> stateInitializer,
+        RedisIrisMemoryProviderOptions? options,
+        RedisIrisSessionEventWriter? eventWriter,
+        ILoggerFactory? loggerFactory,
+        Action<AgentSession?, RedisIrisProviderState>? stateValidator)
     {
         ArgumentNullException.ThrowIfNull(search);
         ArgumentNullException.ThrowIfNull(stateInitializer);
+        this._stateValidator = stateValidator;
         this._options = options ?? new RedisIrisMemoryProviderOptions();
         if (this._options.MaxContextCharacters <= Header.Length)
         {
@@ -70,6 +82,7 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideMessagesAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
+        this._stateValidator?.Invoke(context.Session, state);
         var requestMessages = context.RequestMessages.ToList();
         try
         {
@@ -131,6 +144,7 @@ public sealed class RedisIrisMemoryProvider : MessageAIContextProvider
         }
 
         var state = this._sessionState.GetOrInitializeState(context.Session);
+        this._stateValidator?.Invoke(context.Session, state);
         try
         {
             await this._eventWriter.WriteAsync(
