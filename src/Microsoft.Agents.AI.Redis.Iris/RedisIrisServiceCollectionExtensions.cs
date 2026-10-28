@@ -100,6 +100,17 @@ public static class RedisIrisServiceCollectionExtensions
             return new(identity.SessionId, identity.OwnerId, identity.AgentId, identity.ActorId);
         };
 
+        void ValidateCurrentIdentity(AgentSession? session, RedisIrisProviderState persisted)
+        {
+            // Session state locates data; it never grants permission to the current caller.
+            var current = stateInitializer(session);
+            if (current.SessionId != persisted.SessionId || current.OwnerId != persisted.OwnerId ||
+                current.AgentId != persisted.AgentId || current.ActorId != persisted.ActorId)
+            {
+                throw new UnauthorizedAccessException("The current identity does not match the Redis Iris session.");
+            }
+        }
+
         if (options.UseChatHistoryProvider)
         {
             options.ChatHistory.LoadFailurePolicy = options.HistoryLoadFailurePolicy;
@@ -110,7 +121,8 @@ public static class RedisIrisServiceCollectionExtensions
                 provider.GetRequiredService<RedisIrisMessageMapper>(),
                 options.ChatHistory,
                 provider.GetRequiredService<RedisIrisSessionEventWriter>(),
-                provider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>()));
+                provider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(),
+                ValidateCurrentIdentity));
         }
 
         options.Memory.FailClosed = options.RecallFailurePolicy == RedisIrisFailurePolicy.FailClosed;
@@ -121,7 +133,8 @@ public static class RedisIrisServiceCollectionExtensions
             stateInitializer,
             options.Memory,
             provider.GetRequiredService<RedisIrisSessionEventWriter>(),
-            provider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>()));
+            provider.GetService<Microsoft.Extensions.Logging.ILoggerFactory>(),
+                ValidateCurrentIdentity));
         return services;
     }
 

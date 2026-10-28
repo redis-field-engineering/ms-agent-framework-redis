@@ -35,3 +35,7 @@ the RAM owner, and includes that subject in its session isolation key. Token
 expiry requires sign-in again. Old composite-owner data is not migrated or
 retrieved through a less restricted fallback. The demo's static RAM tenant
 mapping to account `1` applies only to its single-account deployment.
+
+## Session authorization
+
+`AddRedisIrisAgentMemory` resolves and authorizes the current caller before each history load, recall, and event write, including resumed sessions. Persisted state locates memory and must match the newly authorized identity; it does not grant authority. Hosts constructing providers directly should supply `stateValidator` and perform the equivalent per-operation check. Keep session storage protected against unauthorized modification.

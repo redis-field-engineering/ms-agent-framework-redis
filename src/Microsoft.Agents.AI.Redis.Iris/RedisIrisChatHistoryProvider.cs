@@ -46,6 +46,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     private readonly int? _maxMessagesToRetrieve;
     private readonly RedisIrisChatHistoryProviderOptions _options;
     private readonly ILogger<RedisIrisChatHistoryProvider>? _logger;
+    private readonly Action<AgentSession?, RedisIrisProviderState>? _stateValidator;
     private IReadOnlyList<string>? _stateKeys;
 
     /// <summary>Initializes a Redis Iris chat-history provider.</summary>
@@ -56,6 +57,17 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
         RedisIrisChatHistoryProviderOptions? options = null,
         RedisIrisSessionEventWriter? eventWriter = null,
         ILoggerFactory? loggerFactory = null)
+        : this(client, stateInitializer, mapper, options, eventWriter, loggerFactory, null) { }
+
+    /// <summary>Initializes a provider with validation of the current caller before every memory operation.</summary>
+    public RedisIrisChatHistoryProvider(
+        IRedisAgentMemoryClient client,
+        Func<AgentSession?, RedisIrisProviderState> stateInitializer,
+        RedisIrisMessageMapper? mapper,
+        RedisIrisChatHistoryProviderOptions? options,
+        RedisIrisSessionEventWriter? eventWriter,
+        ILoggerFactory? loggerFactory,
+        Action<AgentSession?, RedisIrisProviderState>? stateValidator)
         : base(
             options?.ProvideOutputMessageFilter,
             options?.StoreInputRequestMessageFilter ?? ExternalMessagesOnly,
@@ -63,6 +75,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(stateInitializer);
+        this._stateValidator = stateValidator;
         options ??= new RedisIrisChatHistoryProviderOptions();
         if (options.MaxMessagesToRetrieve is <= 0)
         {
@@ -85,6 +98,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(InvokingContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
+        this._stateValidator?.Invoke(context.Session, state);
         SessionMemory? memory;
         try
         {
@@ -129,6 +143,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
     protected override async ValueTask StoreChatHistoryAsync(InvokedContext context, CancellationToken cancellationToken = default)
     {
         var state = this._sessionState.GetOrInitializeState(context.Session);
+        this._stateValidator?.Invoke(context.Session, state);
         try
         {
             await this._eventWriter.WriteAsync(
