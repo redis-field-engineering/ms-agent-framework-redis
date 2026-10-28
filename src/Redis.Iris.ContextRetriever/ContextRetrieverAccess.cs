@@ -1,11 +1,16 @@
+using System.Text.Json.Serialization;
+
 namespace Redis.Iris.ContextRetriever;
 
 /// <summary>A short-lived Context Retriever credential.</summary>
 /// <param name="AgentKey">Secret server-enforced agent identity.</param>
 /// <param name="Version">Non-secret version used to rotate cached protocol sessions.</param>
 /// <param name="ExpiresAt">Optional credential expiry.</param>
-public sealed record ContextRetrieverCredential(string AgentKey, string Version, DateTimeOffset? ExpiresAt = null)
+public sealed record ContextRetrieverCredential([property: JsonIgnore] string AgentKey, string Version, DateTimeOffset? ExpiresAt = null)
 {
+    /// <inheritdoc />
+    public override string ToString() => "ContextRetrieverCredential { AgentKey = [REDACTED] }";
+
     /// <summary>Throws when the credential cannot be used.</summary>
     public void Validate(TimeProvider? timeProvider = null)
     {
@@ -29,8 +34,11 @@ public interface IContextRetrieverCredentialProvider
 /// <param name="Token">Signed JWT issued for the authenticated application principal.</param>
 /// <param name="Version">Non-secret identifier that changes whenever the JWT changes.</param>
 /// <param name="ExpiresAt">JWT expiry used to bound authenticated MCP-session reuse.</param>
-public sealed record ContextRetrieverDelegatedToken(string Token, string Version, DateTimeOffset ExpiresAt)
+public sealed record ContextRetrieverDelegatedToken([property: JsonIgnore] string Token, string Version, DateTimeOffset ExpiresAt)
 {
+    /// <inheritdoc />
+    public override string ToString() => "ContextRetrieverDelegatedToken { Token = [REDACTED] }";
+
     /// <summary>Throws when the token cannot be used.</summary>
     public void Validate(TimeProvider? timeProvider = null)
     {
