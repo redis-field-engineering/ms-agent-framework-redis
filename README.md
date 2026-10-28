@@ -37,3 +37,7 @@ Milestones 1–3 implement the .NET Agent Memory client and Agent Framework prov
 The connector intentionally pins Agent Framework 1.23.0 for reproducible builds. New minor versions must pass the complete quality gate before this matrix is updated.
 
 The libraries target `net8.0` and can be consumed by .NET 10 applications. Tests run on both runtimes; install both runtimes to run the complete suite locally. The build SDK and library target framework are independent.
+
+## License and package version
+
+This repository is licensed under [MIT](LICENSE). All four packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
