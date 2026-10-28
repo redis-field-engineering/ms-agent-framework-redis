@@ -25,3 +25,10 @@ jobs:
       - run: dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
       - run: dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
       - run: ./eng/validate-packages.sh artifacts
+  sample-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f samples/RedisIrisDevUI/Dockerfile --target context-seeder -t iris-context-tools .
+      - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-model
+      - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-seed
