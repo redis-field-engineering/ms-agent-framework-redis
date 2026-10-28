@@ -1,0 +1,20 @@
+<Project>
+  <Import Project="../Directory.Build.props" />
+  <PropertyGroup>
+    <Version>0.1.0-preview.1</Version>
+    <Authors>Redis, Inc.</Authors>
+    <Copyright>Copyright (c) 2026 Redis, Inc.</Copyright>
+    <RepositoryUrl>https://github.com/redis-field-engineering/ms-agent-framework-redis</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/redis-field-engineering/ms-agent-framework-redis</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>redis;iris;agent-memory;context-retriever;agent-framework</PackageTags>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)../README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)../LICENSE" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

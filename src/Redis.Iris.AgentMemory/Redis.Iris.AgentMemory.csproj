@@ -2,13 +2,9 @@
   <PropertyGroup>
     <Description>Framework-neutral .NET client for Redis Iris Agent Memory.</Description>
     <PackageId>Redis.Iris.AgentMemory</PackageId>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

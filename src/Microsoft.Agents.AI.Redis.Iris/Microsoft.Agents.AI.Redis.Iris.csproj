@@ -2,7 +2,6 @@
   <PropertyGroup>
     <Description>Redis Iris providers for Microsoft Agent Framework.</Description>
     <PackageId>Microsoft.Agents.AI.Redis.Iris</PackageId>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
@@ -13,8 +12,5 @@
     <PackageReference Include="Microsoft.Extensions.Options" />
     <ProjectReference Include="../Redis.Iris.AgentMemory/Redis.Iris.AgentMemory.csproj" />
     <ProjectReference Include="../Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>
