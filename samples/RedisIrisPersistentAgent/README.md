@@ -71,7 +71,7 @@ During `teach` and `full`, the demo prints three distinct memory views:
 - `SUMMARY` — the managed session summary when Redis has compacted earlier events; otherwise the demo clearly reports that no summary exists yet.
 - `WINDOW` — the newest `REDIS_IRIS_SHORT_TERM_WINDOW` events that `RedisIrisChatHistoryProvider` supplies to the current Agent Framework model invocation.
 
-The deliberately small default window of four messages makes the distinction visible: Redis retains the complete session while the model receives a bounded recent slice. Long-term recall remains a separate owner-scoped layer and appears in Session B after promotion.
+The deliberately small default window of four messages makes the distinction visible: Redis retains the complete session while the model receives the server summary (when present) followed by a bounded recent slice. `IncludeSessionSummary` defaults to true, and `MaxSummaryCharacters` bounds summary text separately from the event count. The summary is labeled untrusted user context. Long-term recall remains a separate owner-scoped layer and appears in Session B after promotion.
 
 ## What the demo proves
 
