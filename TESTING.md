@@ -45,9 +45,8 @@ dotnet restore ms-agent-framework-redis.slnx
 dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
 dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
 dotnet test ms-agent-framework-redis.slnx -c Release --no-build
-dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
-dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
-./eng/validate-packages.sh artifacts
+./eng/pack.sh # destination artifacts/packages must be empty
+./eng/package-smoke.sh
 ```
 
 Nullable analysis and warnings-as-errors are repository-wide. Package validation checks that release archives contain no test credentials, captured customer data, build outputs, or test assemblies. Public API changes must be reviewed against the packages produced from the previous release before the supported-version matrix is changed.
@@ -69,4 +68,6 @@ The runner rejects missing settings, skipped tests, empty runs, and failures. Ea
 
 LTM fixtures use random IDs and synthetic owners/topics, track IDs before bulk creation, inspect per-item responses, and delete known fixture records in `finally`/async disposal. The promotion test deletes its session and searches for records under its unique owner even after a failed assertion. Background jobs can finish after cleanup; use short retention on the dedicated test store and inspect/drain it before disposal. This test cleanup is not a complete erasure API or an erasure guarantee.
 
-Validation on October 28, 2026: the managed Context Retriever gate passed all three tests with the existing scoped-key fixture. The self-managed RAM gate passed all five tests, including promotion and provider recall, within the eight-minute limit (about four minutes observed). The user elected to leave delegated-JWT validation pending; that gate must pass before publishing.
+Validation on October 28, 2026: the managed Context Retriever gate passed all three tests with the existing scoped-key fixture. The self-managed RAM gate passed all five tests, including promotion and provider recall, within the eight-minute limit (about two to four minutes observed). The user elected to leave delegated-JWT validation pending; that gate must pass before publishing.
+
+The package gate requires all four release packages at one version, validates internal dependency versions, and restores a standalone .NET 10 consumer from a fresh package cache. Source mapping restricts all connector dependencies to the newly built feed. NuGet.org supplies only external dependencies. The smoke program loads public types from all four packages.
