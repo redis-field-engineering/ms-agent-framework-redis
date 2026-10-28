@@ -118,7 +118,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
 
             ContextRetrieverDiagnostics.ActiveConnection(1);
             var executionGate = new SemaphoreSlim(options.MaximumConcurrentToolExecutions, options.MaximumConcurrentToolExecutions);
-            var connected = new ContextRetrieverClient(client, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
+            var connected = new ContextRetrieverClient(client, transport, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
             ownershipTransferred = true;
             return connected;
         }
@@ -140,8 +140,8 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
                 // if a broken transport also fails during best-effort teardown.
                 try
                 {
-                    if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
-                    else if (transport is not null) await transport.DisposeAsync().ConfigureAwait(false);
+                    try { if (client is not null) await client.DisposeAsync().ConfigureAwait(false); }
+                    finally { if (transport is not null) await transport.DisposeAsync().ConfigureAwait(false); }
                 }
                 catch { }
             }
@@ -166,7 +166,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         return new HttpClientTransport(options, httpClient, _loggerFactory, ownsHttpClient: true);
     }
 
-    private sealed class ContextRetrieverClient(McpClient client, IReadOnlyList<AIFunction> tools, SemaphoreSlim executionGate) : IContextRetrieverClient
+    private sealed class ContextRetrieverClient(McpClient client, HttpClientTransport transport, IReadOnlyList<AIFunction> tools, SemaphoreSlim executionGate) : IContextRetrieverClient
     {
         private int _disposed;
         public IReadOnlyList<AIFunction> Tools { get; } = tools;
@@ -174,8 +174,13 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try { await client.DisposeAsync().ConfigureAwait(false); executionGate.Dispose(); }
-            finally { ContextRetrieverDiagnostics.ActiveConnection(-1); }
+            try { await client.DisposeAsync().ConfigureAwait(false); }
+            finally
+            {
+                try { await transport.DisposeAsync().ConfigureAwait(false); }
+                finally { executionGate.Dispose(); ContextRetrieverDiagnostics.ActiveConnection(-1); }
+            }
+
         }
     }
 }

@@ -99,6 +99,7 @@ public sealed class ContextRetrieverClientContractTests
 
         Assert.Equal(2, handlers.Count);
         Assert.All(handlers, handler => Assert.Contains("initialize", handler.Methods));
+        Assert.All(handlers, handler => Assert.True(handler.Disposed));
     }
 
     [Fact]
