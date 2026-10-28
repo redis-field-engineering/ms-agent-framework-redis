@@ -20,6 +20,7 @@ Start with the [standalone .NET quickstart](https://github.com/redis-field-engin
 - [ASP.NET Core DevUI sample](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/samples/RedisIrisDevUI/README.md)
 - [C# Jupyter notebooks](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/notebooks/csharp/README.md)
 - [Testing and release quality gate](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/TESTING.md)
+- [Preview release procedure](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/releasing.md)
 
 ## Current status
 
