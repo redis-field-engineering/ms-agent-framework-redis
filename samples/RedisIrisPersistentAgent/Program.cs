@@ -205,7 +205,7 @@ async Task PrintMemoryLayersAsync(string sessionId)
 }
 
 RedisAgentMemoryClient CreateMemoryClient() => new(
-    new HttpClient(),
+    new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }),
     new() { Endpoint = new Uri(irisEndpoint), StoreId = irisStoreId },
     new FixedAgentMemoryCredentialProvider(irisApiKey));
 

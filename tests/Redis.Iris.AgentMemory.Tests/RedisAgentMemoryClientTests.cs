@@ -149,6 +149,21 @@ public sealed class RedisAgentMemoryClientTests
         await Assert.ThrowsAsync<ArgumentException>(() => client.AddSessionEventAsync(request));
     }
 
+    [Fact]
+    public async Task RequestsAlwaysUseTheValidatedEndpointInsteadOfClientBaseAddress()
+    {
+        var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        using var http = new HttpClient(handler) { BaseAddress = new("http://wrong-origin.example/") };
+        var client = new RedisAgentMemoryClient(http,
+            new() { Endpoint = new("https://memory.example/prefix"), StoreId = "store" },
+            new FixedAgentMemoryCredentialProvider("key"));
+
+        await client.DeleteSessionMemoryAsync("session");
+
+        Assert.Equal("https://memory.example/prefix/v1/stores/store/session-memory/session", handler.Request!.RequestUri!.AbsoluteUri);
+        Assert.Equal("http://wrong-origin.example/", http.BaseAddress!.AbsoluteUri);
+    }
+
     private static RedisAgentMemoryClient CreateClient(HttpMessageHandler handler) => new(
         new HttpClient(handler),
         new RedisAgentMemoryClientOptions { Endpoint = new Uri("https://memory.example"), StoreId = "store-1" },

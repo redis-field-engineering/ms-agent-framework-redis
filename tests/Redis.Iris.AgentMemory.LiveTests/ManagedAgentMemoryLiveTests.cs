@@ -194,7 +194,7 @@ internal sealed record LiveConfiguration(Uri Endpoint, string StoreId, string Ap
     public static RedisAgentMemoryClient CreateClient() => Load().CreateClient();
 
     public RedisAgentMemoryClient CreateClient(string? apiKey = null) => new(
-        new HttpClient(),
+        new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }),
         new() { Endpoint = this.Endpoint, StoreId = this.StoreId },
         new FixedAgentMemoryCredentialProvider(apiKey ?? this.ApiKey));
 }
