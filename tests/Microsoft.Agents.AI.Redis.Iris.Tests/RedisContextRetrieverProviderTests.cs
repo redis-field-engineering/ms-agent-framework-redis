@@ -112,6 +112,23 @@ public sealed class RedisContextRetrieverProviderTests
         Assert.Equal("traveler-001", (await tool.InvokeAsync(supplied))?.ToString());
     }
 
+    [Fact]
+    public async Task FixedHelperHidesAndOverridesTrustedArguments()
+    {
+        var bindings = new Dictionary<string, IReadOnlyDictionary<string, object?>>
+        {
+            ["get_traveler_by_id"] = new Dictionary<string, object?> { ["id"] = "trusted" },
+        };
+        var profile = new ContextRetrieverAccessProfile(new("https://context.example.test/mcp"), "fixed",
+            new FixedContextRetrieverCredentialProvider(new("key", "v1")), bindings);
+        await using var lease = await RedisContextRetrieverTools.ConnectAsync(profile,
+            new FixedToolFactory(AIFunctionFactory.Create((string id) => id, "get_traveler_by_id")));
+        var tool = Assert.Single(lease.Tools);
+        Assert.False(tool.JsonSchema.GetProperty("properties").TryGetProperty("id", out _));
+        Assert.DoesNotContain("id", tool.JsonSchema.GetProperty("required").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal("trusted", (await tool.InvokeAsync(new(new Dictionary<string, object?> { ["id"] = "untrusted" })))?.ToString());
+    }
+
     private sealed class ProfileToolFactory : IContextRetrieverClientFactory
     {
         public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default)

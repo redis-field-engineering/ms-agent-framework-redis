@@ -34,7 +34,15 @@ public static class RedisContextRetrieverTools
             ExecutionTimeout = policy.ExecutionTimeout,
             MaximumConcurrentToolExecutions = policy.MaximumConcurrentToolExecutions,
         }, credential.AgentKey, delegatedToken?.Token, cancellationToken).ConfigureAwait(false);
-        return new ContextRetrieverToolLease(client);
+        try
+        {
+            return new ContextRetrieverToolLease(client, AuthorizationBoundaryAIFunction.Apply(client.Tools, profile.BoundToolArguments));
+        }
+        catch
+        {
+            await client.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 }
 
@@ -42,10 +50,11 @@ public static class RedisContextRetrieverTools
 public sealed class ContextRetrieverToolLease : IAsyncDisposable
 {
     private IContextRetrieverClient? _client;
-    internal ContextRetrieverToolLease(IContextRetrieverClient client) => _client = client;
+    private readonly IReadOnlyList<AIFunction> _tools;
+    internal ContextRetrieverToolLease(IContextRetrieverClient client, IReadOnlyList<AIFunction> tools) { _client = client; _tools = tools; }
 
     /// <summary>Server-defined Context Retriever tools.</summary>
-    public IReadOnlyList<AIFunction> Tools => _client?.Tools ?? throw new ObjectDisposedException(nameof(ContextRetrieverToolLease));
+    public IReadOnlyList<AIFunction> Tools => _client is not null ? _tools : throw new ObjectDisposedException(nameof(ContextRetrieverToolLease));
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
