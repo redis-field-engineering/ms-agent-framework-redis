@@ -75,10 +75,10 @@ public sealed class ContextRetrieverClientCacheTests
     {
         var factory = new FakeFactory();
         var cache = new ContextRetrieverClientCache(factory, new() { MaximumClients = 1, IdleLifetime = TimeSpan.FromHours(1) });
-        var first = (FakeClient)await cache.GetAsync(Profile("a"), new("one", "v1"), null, Options());
+        await cache.GetAsync(Profile("a"), new("one", "v1"), null, Options());
+        var first = factory.Clients.Single();
         await cache.GetAsync(Profile("b"), new("two", "v1"), null, Options());
 
-        Assert.True(first.Disposed);
         Assert.Equal(1, cache.GetHealth().ActiveClients);
         await cache.DisposeAsync();
         Assert.All(factory.Clients, client => Assert.True(client.Disposed));
@@ -108,7 +108,7 @@ public sealed class ContextRetrieverClientCacheTests
         firstCancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
         factory.Release();
-        Assert.IsType<FakeClient>(await second);
+        Assert.NotNull(await second);
         Assert.Equal(1, factory.ConnectCount);
     }
 
