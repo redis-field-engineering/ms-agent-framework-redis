@@ -1,0 +1,127 @@
+name: preview-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing preview tag reachable from main (v0.1.0-preview.1)
+        required: true
+        type: string
+      publish:
+        description: Publish validated packages to NuGet
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: release-validation
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate and select release tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]] || { echo 'Expected a preview version tag'; exit 1; }
+          commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor "$commit" origin/main
+          git checkout --detach "$commit"
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - run: dotnet restore ms-agent-framework-redis.slnx
+      - run: dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
+      - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
+      - run: dotnet test ms-agent-framework-redis.slnx -c Release --no-build
+      - run: python3 eng/test-package-validation.py
+      - run: ./eng/pack.sh
+      - name: Verify package version matches tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: test "v$(./eng/validate-packages.sh artifacts/packages)" = "$RELEASE_TAG"
+      - run: ./eng/package-smoke.sh
+      - name: Managed RAM live gate including promotion
+        env:
+          REDIS_IRIS_ENDPOINT: ${{ secrets.RAM_LIVE_ENDPOINT }}
+          REDIS_IRIS_STORE_ID: ${{ secrets.RAM_LIVE_STORE_ID }}
+          REDIS_IRIS_API_KEY: ${{ secrets.RAM_LIVE_API_KEY }}
+          REDIS_IRIS_RUN_PROMOTION_TESTS: '1'
+        run: python3 eng/live-release-gate.py managed
+      - name: Write temporary signed-user and Context Retriever bundles
+        env:
+          RAM_DELEGATED_USERS_JSON: ${{ secrets.RAM_DELEGATED_USERS_JSON }}
+          CONTEXT_USERS_JSON: ${{ secrets.CONTEXT_USERS_JSON }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          for name, filename in [('RAM_DELEGATED_USERS_JSON', 'ram-users.json'), ('CONTEXT_USERS_JSON', 'context-users.json')]:
+              value = os.environ.get(name)
+              if not value:
+                  raise SystemExit('Missing ' + name)
+              try:
+                  json.loads(value)
+              except ValueError:
+                  raise SystemExit('Invalid JSON in ' + name) from None
+              path = Path(os.environ['RUNNER_TEMP']) / filename
+              fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+              with os.fdopen(fd, 'w') as stream:
+                  stream.write(value)
+          PY
+      - name: Signed-user RAM isolation gate
+        env:
+          REDIS_IRIS_ENDPOINT: ${{ secrets.RAM_DELEGATED_ENDPOINT }}
+          REDIS_IRIS_STORE_ID: ${{ secrets.RAM_DELEGATED_STORE_ID }}
+          REDIS_IRIS_API_KEY: ${{ secrets.RAM_DELEGATED_API_KEY }}
+          REDIS_IRIS_RAM_DELEGATED_USERS_FILE: ${{ runner.temp }}/ram-users.json
+        run: python3 eng/live-release-gate.py delegated
+      - name: Context Retriever live gate
+        env:
+          REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT: ${{ secrets.CONTEXT_LIVE_ENDPOINT }}
+          REDIS_IRIS_CONTEXT_RETRIEVER_USERS_FILE: ${{ runner.temp }}/context-users.json
+        run: python3 eng/live-release-gate.py context
+      - name: Remove temporary credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/ram-users.json" "$RUNNER_TEMP/context-users.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: validated-preview-packages
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    if: inputs.publish
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: nuget
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/download-artifact@v4
+        with:
+          name: validated-preview-packages
+          path: packages
+      - name: Publish the validated dependency set
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          test -n "$NUGET_API_KEY" || { echo 'Missing NUGET_API_KEY'; exit 1; }
+          for id in Redis.Iris.AgentMemory Redis.Iris.ContextRetriever.Modeling Redis.Iris.ContextRetriever Microsoft.Agents.AI.Redis.Iris; do
+            package="$(find packages -maxdepth 1 -name "$id.[0-9]*.nupkg")"
+            test -f "$package"
+            dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
+          done

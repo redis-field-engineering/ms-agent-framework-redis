@@ -20,6 +20,7 @@ Start with the [standalone .NET quickstart](docs/quickstart.md). Public publicat
 - [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
 - [C# Jupyter notebooks](notebooks/csharp/README.md)
 - [Testing and release quality gate](TESTING.md)
+- [Preview release procedure](docs/releasing.md)
 
 ## Current status
 
