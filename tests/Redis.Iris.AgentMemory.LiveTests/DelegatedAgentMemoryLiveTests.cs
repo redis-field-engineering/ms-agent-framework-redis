@@ -76,6 +76,35 @@ public sealed class DelegatedAgentMemoryLiveTests
         }
     }
 
+    [RamDelegatedLiveFact]
+    [Trait("Category", "Live")]
+    public async Task PopulatedLongTermMemoriesCannotBeReadAcrossSignedUsers()
+    {
+        var users = LoadUsers();
+        await using var first = new LiveMemoryFixture(users[0].AccessToken, users[0].ExpiresAt);
+        await using var second = new LiveMemoryFixture(users[1].AccessToken, users[1].ExpiresAt);
+        var fixtures = new[] { first, second };
+        var topic = "live-topic-" + Guid.NewGuid().ToString("N");
+        var ids = new[]
+        {
+            await first.SeedAsync(users[0].Subject, "Synthetic traveler prefers window seats.", topic),
+            await second.SeedAsync(users[1].Subject, "Synthetic traveler prefers aisle seats.", topic),
+        };
+        // Require both records to be searchable before asserting either cross-user denial.
+        for (var i = 0; i < 2; i++)
+            await LiveMemoryFixture.WaitForAsync(fixtures[i].Client,
+                new() { Text = "", Filter = new() { OwnerId = new() { Eq = users[i].Subject }, Topics = new() { Eq = topic } } },
+                result => result.Items.Any(item => item.Id == ids[i]));
+        for (var i = 0; i < 2; i++)
+        {
+            var ownRequest = new LongTermMemorySearchRequest { Text = "", Filter = new() { OwnerId = new() { Eq = users[i].Subject }, Topics = new() { Eq = topic } } };
+            var own = await LiveMemoryFixture.WaitForAsync(fixtures[i].Client, ownRequest, result => result.Items.Any(item => item.Id == ids[i]));
+            Assert.DoesNotContain(own.Items, item => item.Id == ids[1 - i]);
+            var foreign = await fixtures[i].Client.SearchLongTermMemoryAsync(ownRequest with { Filter = new() { OwnerId = new() { Eq = users[1 - i].Subject }, Topics = new() { Eq = topic } } });
+            Assert.Empty(foreign.Items);
+        }
+    }
+
     private static User[] LoadUsers()
     {
         var path = Environment.GetEnvironmentVariable("REDIS_IRIS_RAM_DELEGATED_USERS_FILE")!;
