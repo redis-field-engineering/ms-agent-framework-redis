@@ -20,6 +20,7 @@ The current priority is a .NET connector for Redis Agent Memory, followed by Red
 - [ASP.NET Core DevUI sample](samples/RedisIrisDevUI/README.md)
 - [C# Jupyter notebooks](notebooks/csharp/README.md)
 - [Testing and release quality gate](TESTING.md)
+- [Preview release procedure](docs/releasing.md)
 
 ## Current status
 
