@@ -63,6 +63,19 @@ public static class ContextDataModelComparer
             if (before.RedisKeyTemplate != after.RedisKeyTemplate) changes.Add(new(ContextModelChangeKind.Destructive, $"Key template changed: {name}"));
             if (JsonSerializer.Serialize(before.AclFieldMappings ?? []) != JsonSerializer.Serialize(after.AclFieldMappings ?? []))
                 changes.Add(new(ContextModelChangeKind.Destructive, $"ACL field mappings changed: {name}"));
+            var beforeRelationships = before.Relationships.ToDictionary(item => item.Name, StringComparer.Ordinal);
+            var afterRelationships = after.Relationships.ToDictionary(item => item.Name, StringComparer.Ordinal);
+            foreach (var removed in beforeRelationships.Keys.Except(afterRelationships.Keys, StringComparer.Ordinal))
+                changes.Add(new(ContextModelChangeKind.Destructive, $"Relationship removed: {name}.{removed}"));
+            foreach (var added in afterRelationships.Keys.Except(beforeRelationships.Keys, StringComparer.Ordinal))
+                changes.Add(new(ContextModelChangeKind.Additive, $"Relationship added: {name}.{added}"));
+            foreach (var relationshipName in beforeRelationships.Keys.Intersect(afterRelationships.Keys, StringComparer.Ordinal))
+            {
+                var oldRelationship = beforeRelationships[relationshipName];
+                var newRelationship = afterRelationships[relationshipName];
+                if (oldRelationship.Target != newRelationship.Target || oldRelationship.SourceField != newRelationship.SourceField)
+                    changes.Add(new(ContextModelChangeKind.Destructive, $"Relationship contract changed: {name}.{relationshipName}"));
+            }
             var beforeFields = before.Fields.ToDictionary(field => field.Name, StringComparer.Ordinal);
             var afterFields = after.Fields.ToDictionary(field => field.Name, StringComparer.Ordinal);
             foreach (var removed in beforeFields.Keys.Except(afterFields.Keys, StringComparer.Ordinal)) changes.Add(new(ContextModelChangeKind.Destructive, $"Field removed: {name}.{removed}"));
@@ -73,6 +86,15 @@ public static class ContextDataModelComparer
                 if (oldField.Type != newField.Type || oldField.IsKeyComponent != newField.IsKeyComponent ||
                     JsonSerializer.Serialize(oldField.RedisIndices) != JsonSerializer.Serialize(newField.RedisIndices))
                     changes.Add(new(ContextModelChangeKind.Destructive, $"Field contract changed: {name}.{fieldName}"));
+                // Null is unrestricted. Compare as sets so reordering is not a contract change.
+                var oldValues = oldField.AllowedValues?.ToHashSet(StringComparer.Ordinal);
+                var newValues = newField.AllowedValues?.ToHashSet(StringComparer.Ordinal);
+                if (oldValues is null ? newValues is not null : newValues is null || !oldValues.SetEquals(newValues))
+                {
+                    var kind = newValues is null || oldValues is not null && oldValues.IsSubsetOf(newValues)
+                        ? ContextModelChangeKind.Additive : ContextModelChangeKind.Destructive;
+                    changes.Add(new(kind, $"Allowed values changed: {name}.{fieldName}"));
+                }
             }
         }
         return changes.OrderBy(change => change.Description, StringComparer.Ordinal).ToArray();
