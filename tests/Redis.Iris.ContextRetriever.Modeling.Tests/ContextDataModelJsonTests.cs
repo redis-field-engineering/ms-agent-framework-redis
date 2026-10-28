@@ -35,6 +35,41 @@ public sealed class ContextDataModelJsonTests
         Assert.Contains(changes, change => change.Kind == ContextModelChangeKind.Destructive && change.Description.Contains("Field removed"));
     }
 
+    [Fact]
+    public void RelationshipChangesCannotDisappearFromCompatibilityReport()
+    {
+        var relationship = new ContextRelationshipDefinition("orders", "Order", "", "order_id");
+        var baseline = Contract(relationships: [relationship]);
+        AssertChange(baseline, Contract(), ContextModelChangeKind.Destructive, "Relationship removed");
+        AssertChange(Contract(), baseline, ContextModelChangeKind.Additive, "Relationship added");
+        AssertChange(baseline, Contract(relationships: [relationship with { Target = "Invoice" }]), ContextModelChangeKind.Destructive, "Relationship contract");
+        AssertChange(baseline, Contract(relationships: [relationship with { SourceField = "invoice_id" }]), ContextModelChangeKind.Destructive, "Relationship contract");
+        Assert.Empty(ContextDataModelComparer.Compare(baseline, Contract(relationships: [relationship with { Description = "New description" }])));
+    }
+
+    [Fact]
+    public void AllowedValuesDetectNarrowingExpansionAndUnrestrictedTransitions()
+    {
+        AssertChange(Contract(), Contract(["open"]), ContextModelChangeKind.Destructive, "Allowed values");
+        AssertChange(Contract(["open", "closed"]), Contract(["open"]), ContextModelChangeKind.Destructive, "Allowed values");
+        AssertChange(Contract(["open"]), Contract(["closed"]), ContextModelChangeKind.Destructive, "Allowed values");
+        AssertChange(Contract(["open"]), Contract(["open", "closed"]), ContextModelChangeKind.Additive, "Allowed values");
+        AssertChange(Contract(["open"]), Contract(), ContextModelChangeKind.Additive, "Allowed values");
+        AssertChange(Contract(["open"]), Contract([]), ContextModelChangeKind.Destructive, "Allowed values");
+        Assert.Empty(ContextDataModelComparer.Compare(Contract(["open", "closed"]), Contract(["closed", "open"])));
+        Assert.Empty(ContextDataModelComparer.Compare(Contract(), Contract()));
+    }
+
+    private static void AssertChange(ContextDataModel baseline, ContextDataModel proposed, ContextModelChangeKind kind, string description)
+    {
+        var change = Assert.Single(ContextDataModelComparer.Compare(baseline, proposed));
+        Assert.Equal(kind, change.Kind);
+        Assert.StartsWith(description, change.Description);
+    }
+
+    private static ContextDataModel Contract(IReadOnlyList<string>? values = null, IReadOnlyList<ContextRelationshipDefinition>? relationships = null) =>
+        new("Commerce", "", [new("Customer", "", "customer:{id}", [new("status", "str", "", false, [], values)], relationships ?? [])]);
+
     private static ContextDataModel Model(string keyTemplate, bool includeName)
     {
         var fields = new List<ContextFieldDefinition> { new("id", "str", "", true, []) };
