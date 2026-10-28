@@ -113,17 +113,57 @@ public sealed class ManagedAgentMemoryLiveTests
     [Trait("Category", "Live")]
     public async Task LongTermMemorySearchKeepsUniqueOwnersIsolated()
     {
-        var client = LiveConfiguration.CreateClient();
-        var firstOwner = Unique("search-owner-a");
-        var secondOwner = Unique("search-owner-b");
-        var search = new RedisIrisLongTermMemorySearch(client);
+        await using var fixture = new LiveMemoryFixture();
+        var firstOwner = Unique("owner-a");
+        var secondOwner = Unique("owner-b");
+        var topic = Unique("topic");
+        var firstId = await fixture.SeedAsync(firstOwner, "Synthetic traveler prefers a window seat.", topic);
+        var secondId = await fixture.SeedAsync(secondOwner, "Synthetic traveler prefers an aisle seat.", topic);
+        foreach (var (owner, own, foreign) in new[] { (firstOwner, firstId, secondId), (secondOwner, secondId, firstId) })
+        {
+            var request = new LongTermMemorySearchRequest { Text = "", Filter = new() { OwnerId = new() { Eq = owner }, Topics = new() { Eq = topic } } };
+            var results = await LiveMemoryFixture.WaitForAsync(fixture.Client, request, result => result.Items.Any(item => item.Id == own));
+            Assert.All(results.Items, item => Assert.Equal(owner, item.OwnerId));
+            Assert.DoesNotContain(results.Items, item => item.Id == foreign);
+        }
+        var provider = new RedisIrisMemoryProvider(new RedisIrisLongTermMemorySearch(fixture.Client),
+            _ => new(Unique("recall"), firstOwner, "live-agent"), new() { FailClosed = true, Search = new() { Topics = new() { Eq = topic } } });
+        var recalled = (await provider.InvokingAsync(new(s_agent, null, [new ChatMessage(ChatRole.User, "What seat does the traveler prefer?")]))).ToArray();
+        Assert.Contains(recalled, message => message.AdditionalProperties?.TryGetValue("redis.iris.memory_ids", out var ids) == true && ((string[])ids!).Contains(firstId));
+    }
 
-        var first = await search.SearchAsync(firstOwner, "integration test", new() { Limit = 10 });
-        var second = await search.SearchAsync(secondOwner, "integration test", new() { Limit = 10 });
-
-        Assert.All(first.Items, item => Assert.Equal(firstOwner, item.OwnerId));
-        Assert.All(second.Items, item => Assert.Equal(secondOwner, item.OwnerId));
-        Assert.Empty(first.Items.Select(static item => item.Id).Intersect(second.Items.Select(static item => item.Id)));
+    [PromotionLiveFact]
+    [Trait("Category", "Live")]
+    public async Task SessionFactsArePromotedAndRecalledWithOwnerScope()
+    {
+        await using var fixture = new LiveMemoryFixture();
+        var owner = Unique("promotion-owner");
+        var session = Unique("promotion-session");
+        try
+        {
+            // A dedicated store must enable extraction with a threshold below this conversation size.
+            for (var index = 0; index < 24; index++)
+                await AddAsync(fixture.Client, session, owner, SessionEventRole.USER,
+                    "Synthetic traveler prefers window seats and vegetarian meals on flights. Please remember these travel preferences.", index);
+            var request = new LongTermMemorySearchRequest { Text = "", Limit = 100, Filter = new() { OwnerId = new() { Eq = owner }, SessionId = new() { Eq = session } } };
+            var promoted = await LiveMemoryFixture.WaitForAsync(fixture.Client, request, result => result.Items.Count > 0, TimeSpan.FromSeconds(PromotionTimeoutSeconds()));
+            fixture.Track(promoted.Items.Select(item => item.Id));
+            Assert.All(promoted.Items, item => Assert.Equal(owner, item.OwnerId));
+            var provider = new RedisIrisMemoryProvider(new RedisIrisLongTermMemorySearch(fixture.Client),
+                _ => new(session, owner, "live-agent"), new() { FailClosed = true });
+            var messages = (await provider.InvokingAsync(new(s_agent, null, [new ChatMessage(ChatRole.User, "What flight seat and meal do I prefer?")]))).ToArray();
+            Assert.Contains(messages, message => message.AdditionalProperties?.ContainsKey("redis.iris.memory_ids") == true);
+            var other = await fixture.Client.SearchLongTermMemoryAsync(request with { Filter = new() { OwnerId = new() { Eq = Unique("foreign") }, SessionId = new() { Eq = session } } });
+            Assert.Empty(other.Items);
+        }
+        finally
+        {
+            await DeleteSessionIfPresentAsync(fixture.Client, session);
+            // Find only this run's synthetic owner, including records promoted before a failed assertion.
+            var page = await fixture.Client.SearchLongTermMemoryAsync(new() { Text = "", Limit = 100, Filter = new() { OwnerId = new() { Eq = owner } } });
+            fixture.Track(page.Items.Select(item => item.Id));
+            Assert.Null(page.NextPageToken); // More than one page requires explicit cleanup, never silently truncate.
+        }
     }
 
     [LiveFact]
@@ -137,6 +177,15 @@ public sealed class ManagedAgentMemoryLiveTests
             client.GetSessionMemoryAsync(Unique("unauthorized-session")));
 
         Assert.True(exception.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
+    }
+
+    private static int PromotionTimeoutSeconds()
+    {
+        var value = Environment.GetEnvironmentVariable("REDIS_IRIS_PROMOTION_TIMEOUT_SECONDS");
+        if (value is null) return 480;
+        if (!int.TryParse(value, out var seconds) || seconds is < 30 or > 900)
+            throw new ArgumentException("REDIS_IRIS_PROMOTION_TIMEOUT_SECONDS must be between 30 and 900.");
+        return seconds;
     }
 
     private static Task<SessionEvent> AddAsync(
@@ -209,5 +258,14 @@ internal sealed class LiveFactAttribute : FactAttribute
         {
             this.Skip = "Set REDIS_IRIS_ENDPOINT, REDIS_IRIS_STORE_ID, and REDIS_IRIS_API_KEY to run live tests.";
         }
+    }
+}
+
+internal sealed class PromotionLiveFactAttribute : FactAttribute
+{
+    public PromotionLiveFactAttribute()
+    {
+        if (Environment.GetEnvironmentVariable("REDIS_IRIS_RUN_PROMOTION_TESTS") != "1")
+            Skip = "Set REDIS_IRIS_RUN_PROMOTION_TESTS=1 only for a dedicated store with extraction enabled and a short session threshold.";
     }
 }
