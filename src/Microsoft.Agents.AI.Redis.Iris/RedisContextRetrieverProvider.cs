@@ -53,7 +53,8 @@ public sealed class RedisContextRetrieverProvider : AIContextProvider, IAsyncDis
         credential.Validate();
         var delegatedToken = profile.DelegatedTokenProvider is null
             ? null
-            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new ContextRetrieverAccessDeniedException("The configured delegated token provider returned no token.");
         delegatedToken?.Validate();
         var client = await _clients.GetAsync(profile, credential, delegatedToken, new ContextRetrieverClientOptions
         {

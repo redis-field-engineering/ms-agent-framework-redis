@@ -36,6 +36,8 @@ public sealed class ContextRetrieverClientCache : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         profile.Validate();
+        if (profile.DelegatedTokenProvider is not null && delegatedToken is null)
+            throw new ContextRetrieverAccessDeniedException("The configured delegated token provider returned no token.");
         credential.Validate(_timeProvider);
         delegatedToken?.Validate(_timeProvider);
         if (profile.Endpoint != clientOptions.Endpoint) throw new ArgumentException("Access profile and client endpoint must match.", nameof(clientOptions));

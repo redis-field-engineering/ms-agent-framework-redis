@@ -14,6 +14,8 @@ Create least-privilege agent keys whose server-side access tags expose only the 
 
 Rotate an agent key by returning a new key and non-secret version from `IContextRetrieverCredentialProvider`. Refresh a user token by returning a new token and version from `IContextRetrieverDelegatedTokenProvider`. Both changes establish a separate MCP session. Delegated-token expiry is mandatory and bounds cached-session lifetime, even when the configured idle lifetime is longer. Never use the JWT itself as its version or access-profile ID.
 
+When a delegated-token provider is configured, a missing token fails before connecting or reusing a session. Neither entry point falls back to agent-key-only authentication.
+
 Production endpoints must use HTTPS. Plain HTTP is accepted only for loopback development. Automatic redirects and ambient HTTP cookies are disabled so credentials cannot be forwarded to another origin. Endpoint, profile, and credential selection come exclusively from trusted resolver code; model-generated tool arguments can neither select a tenant nor supply a key. Tool results remain untrusted data and must not be treated as instructions.
 
 ## Metrics and alerts
