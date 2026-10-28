@@ -23,6 +23,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     private readonly Uri _endpoint;
 
     /// <summary>Initializes a new client.</summary>
+    /// <remarks>The caller owns the HTTP client and must disable automatic redirects and cookies on its handler.</remarks>
     public RedisAgentMemoryClient(
         HttpClient httpClient,
         RedisAgentMemoryClientOptions options,
@@ -45,6 +46,11 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         if (!options.Endpoint.IsAbsoluteUri || options.Endpoint.Scheme != Uri.UriSchemeHttps && options.Endpoint.Scheme != Uri.UriSchemeHttp)
         {
             throw new ArgumentException("Endpoint must be an absolute HTTP or HTTPS URI.", nameof(options));
+        }
+
+        if (options.Endpoint.Scheme == Uri.UriSchemeHttp && !options.Endpoint.IsLoopback)
+        {
+            throw new ArgumentException("Unencrypted Agent Memory endpoints are allowed only on loopback.", nameof(options));
         }
 
         ValidateIdentifier(options.StoreId, nameof(options.StoreId));

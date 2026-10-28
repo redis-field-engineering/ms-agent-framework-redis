@@ -75,6 +75,7 @@ public static class RedisIrisServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton(credentialProvider);
         services.AddHttpClient("Redis.Iris.AgentMemory", client => client.BaseAddress = options.Endpoint)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
             .RedactLoggedHeaders(["Authorization", "X-Iris-User-Token"]);
         services.AddSingleton<IRedisAgentMemoryClient>(provider => new RedisAgentMemoryClient(
             provider.GetRequiredService<IHttpClientFactory>().CreateClient("Redis.Iris.AgentMemory"),
@@ -130,6 +131,11 @@ public static class RedisIrisServiceCollectionExtensions
         if (options.Endpoint is null || !options.Endpoint.IsAbsoluteUri || options.Endpoint.Scheme != Uri.UriSchemeHttps && options.Endpoint.Scheme != Uri.UriSchemeHttp)
         {
             throw new ArgumentException("Endpoint must be an absolute HTTP or HTTPS URI.", nameof(options.Endpoint));
+        }
+
+        if (options.Endpoint.Scheme == Uri.UriSchemeHttp && !options.Endpoint.IsLoopback)
+        {
+            throw new ArgumentException("Unencrypted Agent Memory endpoints are allowed only on loopback.", nameof(options));
         }
 
         if (string.IsNullOrWhiteSpace(options.StoreId))

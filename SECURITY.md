@@ -35,3 +35,7 @@ the RAM owner, and includes that subject in its session isolation key. Token
 expiry requires sign-in again. Old composite-owner data is not migrated or
 retrieved through a less restricted fallback. The demo's static RAM tenant
 mapping to account `1` applies only to its single-account deployment.
+
+## Agent Memory transport
+
+Production endpoints require HTTPS; plain HTTP is accepted only on loopback for development. The DI registration disables automatic redirects and cookies. Applications supplying their own `HttpClient` must also set `AllowAutoRedirect = false` and `UseCookies = false` on its handler: .NET can forward custom headers, including `X-Iris-User-Token`, across redirects. The connector cannot inspect an arbitrary caller-owned handler pipeline.
