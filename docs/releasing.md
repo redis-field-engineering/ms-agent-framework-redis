@@ -2,7 +2,7 @@
 
 The manual `preview-release` workflow validates an existing version tag. It does not run on merge or create tags. `publish` defaults to false. No NuGet publication has been performed as part of preparing this repository.
 
-1. Complete the [release quality gate](../TESTING.md), including fresh two-user signed RAM isolation. The current signed-user gate is pending; publication must wait.
+1. Complete the [release quality gate](../TESTING.md), including fresh two-user signed RAM isolation. The current signed-user gate is pending; publication must wait. The repository is also currently private. Package documentation links point here, so the publishing job requires public repository visibility. Changing visibility is a separate owner-controlled release decision; this workflow never changes it. If documentation will be hosted elsewhere, update and validate every package URL and the publication check first.
 2. Set the next unused preview version in `src/Directory.Build.props`, review the changes and release notes, and merge them. All four packages share this version. Never move a published tag or reuse a package version for different content.
 3. Create and push the corresponding tag on the reviewed main commit, such as `v0.1.0-preview.1`.
 4. Run `preview-release` with that tag and `publish=false`. The workflow requires the tag to be reachable from main and its version to match the package version. It builds/tests both runtimes, checks the complete package set and a fresh consumer, and requires all three live gates to pass without skips.
