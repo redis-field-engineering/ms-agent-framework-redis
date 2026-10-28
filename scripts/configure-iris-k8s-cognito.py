@@ -31,12 +31,27 @@ def terraform_output(name):
     return json.loads(result.stdout)
 
 
-def configure():
+def configure(args):
     settings = json.loads((k8s.PRIVATE / "iris-k8s-settings.json").read_text())
     binding = json.loads((k8s.PRIVATE / "iris-k8s-context.json").read_text())
     surface_id = binding["surfaceId"]
     if binding["cluster"]["kubeconfig"] != k8s.KUBECONFIG or binding["cluster"]["namespace"] != k8s.NAMESPACE:
         raise RuntimeError("Saved sample credentials do not match the selected cluster.")
+    ram_checkpoint = k8s.PRIVATE / "iris-k8s-cognito-ram.json"
+    ram = json.loads(ram_checkpoint.read_text()) if ram_checkpoint.exists() else {"enabled": False}
+    if ram.get("cluster", binding["cluster"]) != binding["cluster"]:
+        raise RuntimeError("Saved RAM profile belongs to a different cluster.")
+    if args.ram_profile:
+        profile = json.loads(Path(args.ram_profile).read_text())
+        if any(not isinstance(profile.get(key), str) or not profile[key].strip()
+               for key in ("endpoint", "storeId", "agentKey")):
+            raise RuntimeError("RAM profile requires endpoint, storeId, and agentKey strings.")
+        ram.update({key: profile[key] for key in ("endpoint", "storeId", "agentKey")})
+    if args.ram_delegated_auth is not None:
+        ram["enabled"] = args.ram_delegated_auth
+    if ram["enabled"] and any(not ram.get(key) for key in ("endpoint", "storeId", "agentKey")):
+        raise RuntimeError("Import the compatible RAM deployment with --ram-profile before enabling delegated authentication.")
+    ram["cluster"] = binding["cluster"]
     users = binding["users"]
     tenants = {user["tenantId"] for user in users}
     if len(tenants) != 1:
@@ -94,18 +109,29 @@ def configure():
         "DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR": "true",
         # Local traveler keys cannot authorize requests after JWT enforcement is enabled.
         "REDIS_IRIS_CONTEXT_RETRIEVER_USERS_FILE": str(k8s.PRIVATE / "iris-k8s-cognito-users.json"),
+        "REDIS_IRIS_RAM_DELEGATED_AUTH": str(ram["enabled"]).lower(),
     })
+    for source, target in (("endpoint", "REDIS_IRIS_ENDPOINT"), ("storeId", "REDIS_IRIS_STORE_ID"),
+                           ("agentKey", "REDIS_IRIS_API_KEY")):
+        if source in ram:
+            settings[target] = ram[source]
+    k8s.save_private(ram_checkpoint, json.dumps(ram, indent=2) + "\n")
     k8s.save_private(k8s.PRIVATE / "iris-k8s-cognito.env",
                      "# Kubernetes endpoints with existing Cognito OIDC authentication.\n" +
                      "".join(f"export {name}={shlex.quote(value)}\n" for name, value in settings.items()))
-    print("Wrote secrets/iris-k8s-cognito.env (mode 0600); RAM authentication is unchanged.")
+    print("Wrote secrets/iris-k8s-cognito.env (mode 0600).")
+    print("RAM delegated JWT mode: " + ("enabled; requires compatible service configuration." if ram["enabled"] else "disabled."))
     print("Run REDIS_IRIS_ENV_FILE=secrets/iris-k8s-cognito.env ./scripts/run-agent-memory-devui.sh")
 
 
 if __name__ == "__main__":
-    argparse.ArgumentParser(description=__doc__).parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ram-delegated-auth", action=argparse.BooleanOptionalAction, default=None,
+                        help="Enable RAM JWT forwarding only after the service supports delegation; preserved on reruns.")
+    parser.add_argument("--ram-profile", help="Protected infrastructure JSON with endpoint, storeId, and agentKey; preserved on reruns.")
+    args = parser.parse_args()
     try:
-        configure()
+        configure(args)
     except (RuntimeError, OSError, ValueError, KeyError, subprocess.TimeoutExpired) as error:
         message = str(error) if isinstance(error, RuntimeError) else type(error).__name__
         print(f"Kubernetes Cognito setup failed: {message}", file=sys.stderr)

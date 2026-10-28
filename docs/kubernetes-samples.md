@@ -134,6 +134,61 @@ described in [the notebook README](../notebooks/csharp/README.md).
 
 ## Other samples and validation
 
+### Optional RAM delegated JWT mode
+
+After the infrastructure deployment supports RAM delegated authentication,
+enable the connector with the same Cognito login used by CR:
+
+```bash
+# In a separate terminal, keep the isolated RAM forwards running as well as the CR forwards:
+~/projects/terraform/redis-iris-k8s/scripts/forward-ram-jwt.sh
+```
+
+Then configure and start the application:
+
+```bash
+python3 scripts/configure-iris-k8s-cognito.py --ram-delegated-auth \
+  --ram-profile "$HOME/projects/terraform/redis-iris-k8s/secrets/ram-jwt-connector.json"
+REDIS_IRIS_ENV_FILE="$PWD/secrets/iris-k8s-cognito.env" ./scripts/run-agent-memory-devui.sh
+```
+
+The isolated deployment uses RAM 0.10.2 on local port 9002, a dedicated store,
+and a separate Identity Service. The original RAM on port 9000 and its bootstrap
+keys remain intact. Its forwarding script also exposes control and identity
+administration on loopback ports 9003 and 9004. Only start a forwarding script if
+those ports are not already forwarded.
+
+Import the infrastructure-provided profile once with `--ram-profile`. Its JSON must contain
+`endpoint`, `storeId`, and `agentKey`. The setup preserves the selected RAM mode
+and credential in ignored `secrets/iris-k8s-cognito-ram.json` on reruns. Use
+`--no-ram-delegated-auth` to explicitly disable forwarding; disabling it does not
+restore personal access when the server enforces user ownership.
+The setup refuses to enable delegation before a RAM profile has been imported,
+so it cannot accidentally point JWT mode at the original unsupported deployment.
+
+The application sends its RAM key in `Authorization` and the current Cognito
+access JWT in `X-Iris-User-Token`. New RAM sessions belong to the validated
+Cognito `sub`; previous tenant/traveler composite-owner records remain intact in
+the original store and are not copied into this dedicated store.
+Restarting DevUI clears its in-memory sessions and requires sign-in again.
+
+This switch does not upgrade RAM, configure its trust, or enable server ownership
+enforcement. Coordinate those changes with the infrastructure deployment, and
+verify two-user isolation after cutover. In RAM 0.10.2 the enforcement setting is
+`memory.ownership.enabled`; earlier source documentation used
+`memory.namespace_features.enforce_ownership`. Use the deployed release's schema.
+The original key-only smoke probe and personal-memory samples need a supported
+identity path once enforcement is on. Do not run them unchanged against that
+data plane and interpret their authorization errors as a service outage.
+
+On October 26, 2026, the user confirmed a real Cognito sign-in and the query
+“Remember that my preferred seat is a window seat. What is my name and home
+airport?” succeeded with RAM delegation enabled against the isolated deployment.
+The application log showed two initialized RAM sessions, no failure entries,
+and no RAM HTTP errors. This validates the signed-user DevUI flow; the automated
+two-user isolation suite and asynchronous memory promotion remain separate,
+uncompleted checks.
+
 The persistent memory demo uses the same explicitly selected profile:
 
 ```bash

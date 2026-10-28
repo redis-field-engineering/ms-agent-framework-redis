@@ -18,6 +18,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
 
     private readonly HttpClient _httpClient;
     private readonly IAgentMemoryCredentialProvider _credentialProvider;
+    private readonly IAgentMemoryDelegatedTokenProvider? _delegatedTokenProvider;
     private readonly string _storePath;
     private readonly Uri _endpoint;
 
@@ -26,6 +27,16 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         HttpClient httpClient,
         RedisAgentMemoryClientOptions options,
         IAgentMemoryCredentialProvider credentialProvider)
+        : this(httpClient, options, credentialProvider, null)
+    {
+    }
+
+    /// <summary>Initializes a client with optional per-request delegated user authentication.</summary>
+    public RedisAgentMemoryClient(
+        HttpClient httpClient,
+        RedisAgentMemoryClientOptions options,
+        IAgentMemoryCredentialProvider credentialProvider,
+        IAgentMemoryDelegatedTokenProvider? delegatedTokenProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
@@ -40,6 +51,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
 
         this._httpClient = httpClient;
         this._credentialProvider = credentialProvider;
+        this._delegatedTokenProvider = delegatedTokenProvider;
         this._endpoint = options.Endpoint;
         this._storePath = $"v1/stores/{Uri.EscapeDataString(options.StoreId)}";
         this._httpClient.BaseAddress ??= EnsureTrailingSlash(options.Endpoint);
@@ -281,8 +293,20 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             throw new InvalidOperationException("The Agent Memory credential provider returned an empty credential.");
         }
 
+        AgentMemoryDelegatedToken? delegatedToken = null;
+        if (this._delegatedTokenProvider is not null)
+        {
+            delegatedToken = await this._delegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new UnauthorizedAccessException("The Agent Memory delegated token provider returned no token.");
+            delegatedToken.Validate();
+        }
+
         var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential);
+        if (delegatedToken is not null)
+        {
+            request.Headers.Add("X-Iris-User-Token", delegatedToken.Token);
+        }
         return request;
     }
 

@@ -23,6 +23,26 @@ The managed suite verifies multi-role event ordering, individual-event retrieval
 
 Before merging:
 
+The optional RAM delegated suite requires an ownership-enforcing RAM deployment
+and `REDIS_IRIS_RAM_DELEGATED_USERS_FILE` pointing to an ignored, mode-0600 JSON
+array of exactly two objects with `subject`, `accessToken`, and `expiresAt`
+(ISO-8601 UTC). Tokens must be fresh signed Cognito access tokens; `subject`
+must equal their validated `sub`. Load that deployment's RAM endpoint/store/key
+and run only this suite, since the original key-only live tests use arbitrary
+owners:
+
+```bash
+dotnet test tests/Redis.Iris.AgentMemory.LiveTests --filter FullyQualifiedName~DelegatedAgentMemoryLiveTests
+```
+
+It checks personal session creation/read/list/delete isolation, forged initial
+actors, missing/invalid user tokens, and invalid agent keys. It also checks a
+foreign-owner LTM search returns no results, but does not seed promoted memories
+or prove asynchronous promotion. It cleans up only unique sessions created by
+that run; promoted test data, if any, requires separate explicit cleanup.
+
+The release quality gate is:
+
 ```bash
 dotnet restore ms-agent-framework-redis.slnx
 dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore

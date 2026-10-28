@@ -116,7 +116,12 @@ Sign out before testing the second traveler. The provisioned keys are distinct a
 
 For Context Retriever running in GKE, use the [Kubernetes Cognito profile](../../docs/kubernetes-samples.md#reuse-cognito-for-the-gke-context-retriever).
 It reuses the same pool and DevUI OIDC flow, configures the GKE travel surface,
-and keeps RAM on its existing Kubernetes service key.
+and keeps RAM on its existing Kubernetes service key by default. Once RAM has
+compatible delegation and ownership configuration, opt in with
+`REDIS_IRIS_RAM_DELEGATED_AUTH=true` (or the setup script's `--ram-delegated-auth`
+option). The same signed access token is forwarded to RAM with its agent key;
+new personal memories use Cognito `sub` as owner. See the
+[RAM setup details](../../docs/kubernetes-samples.md#optional-ram-delegated-jwt-mode).
 
 The development sign-in-token flow above remains the default. To exercise real delegated JWT authorization instead, deploy [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md), configure the Context Retriever surface to trust the emitted issuer/JWKS/audience, and add the following non-secret Terraform outputs to `.env.local`:
 

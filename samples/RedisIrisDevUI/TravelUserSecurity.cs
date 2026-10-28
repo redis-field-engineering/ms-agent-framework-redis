@@ -8,6 +8,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Redis.Iris.AgentMemory;
 using Redis.Iris.ContextRetriever;
 
 namespace RedisIrisDevUI;
@@ -24,10 +25,26 @@ internal sealed record TravelUser(
     string? ContextRetrieverDelegatedTokenVersion,
     DateTimeOffset? ContextRetrieverDelegatedTokenExpiresAt)
 {
-    public string IsolationKey => $"{TenantId}:{TravelerId}";
+    public bool UseSubjectForRamOwner { get; init; }
 
-    // RAM owner IDs use a storage-safe, unambiguous length-prefixed composite.
-    public string RamOwnerId => $"{TenantId.Length}-{TenantId}-{TravelerId.Length}-{TravelerId}";
+    public string IsolationKey => UseSubjectForRamOwner
+        ? $"{TenantId}:{TravelerId}:{RamOwnerId}"
+        : $"{TenantId}:{TravelerId}";
+
+    // Key-only mode preserves the composite owner; delegated mode uses the signed subject verbatim.
+    public string RamOwnerId
+    {
+        get
+        {
+            if (!UseSubjectForRamOwner) return $"{TenantId.Length}-{TenantId}-{TravelerId.Length}-{TravelerId}";
+            if (string.IsNullOrEmpty(Subject) || Subject.Length > 64 ||
+                Subject.Any(static c => !char.IsAsciiLetterOrDigit(c) && c != '-'))
+            {
+                throw new UnauthorizedAccessException("The validated subject is not a supported RAM owner ID.");
+            }
+            return Subject;
+        }
+    }
 }
 
 internal sealed record TravelSecurityBundle(
@@ -179,6 +196,14 @@ internal sealed class TravelDelegatedTokenProvider(TravelUserAccessor users) : I
                 throw new ContextRetrieverAccessDeniedException("The OIDC authentication ticket is unavailable.");
             }
 
+            var current = users.Current;
+            if (authentication.Principal.FindFirstValue(ClaimTypes.NameIdentifier) != current.Subject ||
+                authentication.Principal.FindFirstValue(TravelUserDirectory.TenantClaim) != current.TenantId ||
+                authentication.Principal.FindFirstValue(TravelUserDirectory.TravelerClaim) != current.TravelerId)
+            {
+                throw new ContextRetrieverAccessDeniedException("The authentication ticket does not belong to the current caller.");
+            }
+
             var accessToken = authentication.Properties.GetTokenValue("access_token");
             var expiresAtValue = authentication.Properties.GetTokenValue("expires_at");
             var version = authentication.Principal.FindFirstValue(TravelAuthentication.AccessTokenVersionClaim);
@@ -207,22 +232,53 @@ internal sealed class TravelDelegatedTokenProvider(TravelUserAccessor users) : I
     }
 }
 
+internal sealed class TravelRamDelegatedTokenProvider(TravelUserAccessor users) : IAgentMemoryDelegatedTokenProvider
+{
+    private readonly TravelDelegatedTokenProvider _tokens = new(users);
+
+    public async ValueTask<AgentMemoryDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default)
+    {
+        if (users.AuthenticationMode != TravelAuthenticationMode.OpenIdConnect)
+        {
+            throw new UnauthorizedAccessException("RAM delegation requires an authenticated OIDC caller.");
+        }
+
+        // Use the same validated server-side ticket as CR; never read a token from request input.
+        var token = await this._tokens.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+        var delegated = new AgentMemoryDelegatedToken(token.Token, token.ExpiresAt);
+        delegated.Validate();
+        return delegated;
+    }
+}
+
 internal sealed class TravelUserAccessor(
     IHttpContextAccessor httpContextAccessor,
     TravelUserDirectory directory,
     TravelUser legacyUser,
-    TravelAuthenticationMode authenticationMode)
+    TravelAuthenticationMode authenticationMode,
+    bool useSubjectForRamOwner = false)
 {
+    private readonly bool _useSubjectForRamOwner = ValidateRamMode(authenticationMode, useSubjectForRamOwner);
+
     public TravelAuthenticationMode AuthenticationMode { get; } = authenticationMode;
 
     public HttpContext? HttpContext => httpContextAccessor.HttpContext;
 
     public TravelUser Current => AuthenticationMode == TravelAuthenticationMode.OpenIdConnect
-        ? ResolveOpenIdConnectUser(httpContextAccessor.HttpContext?.User)
+        ? ResolveOpenIdConnectUser(httpContextAccessor.HttpContext?.User) with { UseSubjectForRamOwner = this._useSubjectForRamOwner }
         : directory.IsMultiUser
             ? directory.Resolve(httpContextAccessor.HttpContext?.User
                 ?? throw new UnauthorizedAccessException("No authenticated HTTP caller is available."))
             : legacyUser;
+
+    private static bool ValidateRamMode(TravelAuthenticationMode mode, bool delegated)
+    {
+        if (delegated && mode != TravelAuthenticationMode.OpenIdConnect)
+        {
+            throw new InvalidOperationException("REDIS_IRIS_RAM_DELEGATED_AUTH requires DEVUI_AUTH_MODE=oidc.");
+        }
+        return delegated;
+    }
 
     private static TravelUser ResolveOpenIdConnectUser(ClaimsPrincipal? principal)
     {
