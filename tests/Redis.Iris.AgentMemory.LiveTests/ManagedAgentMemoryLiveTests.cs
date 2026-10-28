@@ -119,6 +119,11 @@ public sealed class ManagedAgentMemoryLiveTests
         var topic = Unique("topic");
         var firstId = await fixture.SeedAsync(firstOwner, "Synthetic traveler prefers a window seat.", topic);
         var secondId = await fixture.SeedAsync(secondOwner, "Synthetic traveler prefers an aisle seat.", topic);
+        // Establish both positive baselines before either negative assertion: indexing is asynchronous.
+        foreach (var (owner, id) in new[] { (firstOwner, firstId), (secondOwner, secondId) })
+            await LiveMemoryFixture.WaitForAsync(fixture.Client,
+                new() { Text = "", Filter = new() { OwnerId = new() { Eq = owner }, Topics = new() { Eq = topic } } },
+                result => result.Items.Any(item => item.Id == id));
         foreach (var (owner, own, foreign) in new[] { (firstOwner, firstId, secondId), (secondOwner, secondId, firstId) })
         {
             var request = new LongTermMemorySearchRequest { Text = "", Filter = new() { OwnerId = new() { Eq = owner }, Topics = new() { Eq = topic } } };
@@ -147,8 +152,7 @@ public sealed class ManagedAgentMemoryLiveTests
                     "Synthetic traveler prefers window seats and vegetarian meals on flights. Please remember these travel preferences.", index);
             var request = new LongTermMemorySearchRequest { Text = "", Limit = 100, Filter = new() { OwnerId = new() { Eq = owner }, SessionId = new() { Eq = session } } };
             var promoted = await LiveMemoryFixture.WaitForAsync(fixture.Client, request, result => result.Items.Count > 0, TimeSpan.FromSeconds(PromotionTimeoutSeconds()));
-            fixture.Track(promoted.Items.Select(item => item.Id));
-            Assert.All(promoted.Items, item => Assert.Equal(owner, item.OwnerId));
+            TrackOwned(fixture, promoted, owner, session);
             var provider = new RedisIrisMemoryProvider(new RedisIrisLongTermMemorySearch(fixture.Client),
                 _ => new(session, owner, "live-agent"), new() { FailClosed = true });
             var messages = (await provider.InvokingAsync(new(s_agent, null, [new ChatMessage(ChatRole.User, "What flight seat and meal do I prefer?")]))).ToArray();
@@ -160,8 +164,8 @@ public sealed class ManagedAgentMemoryLiveTests
         {
             await DeleteSessionIfPresentAsync(fixture.Client, session);
             // Find only this run's synthetic owner, including records promoted before a failed assertion.
-            var page = await fixture.Client.SearchLongTermMemoryAsync(new() { Text = "", Limit = 100, Filter = new() { OwnerId = new() { Eq = owner } } });
-            fixture.Track(page.Items.Select(item => item.Id));
+            var page = await fixture.Client.SearchLongTermMemoryAsync(new() { Text = "", Limit = 100, Filter = new() { OwnerId = new() { Eq = owner }, SessionId = new() { Eq = session } } });
+            TrackOwned(fixture, page, owner, session);
             Assert.Null(page.NextPageToken); // More than one page requires explicit cleanup, never silently truncate.
         }
     }
@@ -177,6 +181,17 @@ public sealed class ManagedAgentMemoryLiveTests
             client.GetSessionMemoryAsync(Unique("unauthorized-session")));
 
         Assert.True(exception.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
+    }
+
+    private static void TrackOwned(LiveMemoryFixture fixture, LongTermMemorySearchResult page, string owner, string session)
+    {
+        // The filter itself is under test. Never trust it to select IDs for a destructive operation.
+        fixture.Track(page.Items.Where(item => item.OwnerId == owner && item.SessionId == session).Select(item => item.Id));
+        Assert.All(page.Items, item =>
+        {
+            Assert.Equal(owner, item.OwnerId);
+            Assert.Equal(session, item.SessionId);
+        });
     }
 
     private static int PromotionTimeoutSeconds()

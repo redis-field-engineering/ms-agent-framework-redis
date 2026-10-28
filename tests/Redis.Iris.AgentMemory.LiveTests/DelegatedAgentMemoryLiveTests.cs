@@ -90,6 +90,11 @@ public sealed class DelegatedAgentMemoryLiveTests
             await first.SeedAsync(users[0].Subject, "Synthetic traveler prefers window seats.", topic),
             await second.SeedAsync(users[1].Subject, "Synthetic traveler prefers aisle seats.", topic),
         };
+        // Require both records to be searchable before asserting either cross-user denial.
+        for (var i = 0; i < 2; i++)
+            await LiveMemoryFixture.WaitForAsync(fixtures[i].Client,
+                new() { Text = "", Filter = new() { OwnerId = new() { Eq = users[i].Subject }, Topics = new() { Eq = topic } } },
+                result => result.Items.Any(item => item.Id == ids[i]));
         for (var i = 0; i < 2; i++)
         {
             var ownRequest = new LongTermMemorySearchRequest { Text = "", Filter = new() { OwnerId = new() { Eq = users[i].Subject }, Topics = new() { Eq = topic } } };
