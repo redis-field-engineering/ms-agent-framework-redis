@@ -163,8 +163,11 @@ public sealed class RedisIrisChatHistoryProviderTests
     [Fact]
     public async Task SummaryOnlySessionStillProvidesHistoricalContext()
     {
-        var client = new RecordingClient { Memory = new("session", "owner", [],
-            Summary: new("earlier facts", "old", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { }), 20)) };
+        var client = new RecordingClient
+        {
+            Memory = new("session", "owner", [],
+            Summary: new("earlier facts", "old", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, JsonSerializer.SerializeToElement(new { }), 20))
+        };
         var provider = Provider(client, new("session", "owner", "agent"));
         Assert.Contains("earlier facts", Assert.Single(await provider.InvokingAsync(new(s_agent, null, []))).Text);
     }
