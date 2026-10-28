@@ -213,3 +213,9 @@ curl -X DELETE 'http://localhost:5080/api/ram?confirm=redis-iris-devui-shopper'
 ```
 
 This is deliberately a local-development sample. It refuses to start outside the ASP.NET Core `Development` environment. A production application must authenticate callers and derive the owner and tenant from trusted claims rather than a shared environment variable.
+
+## Safari on HTTP localhost
+
+The local OIDC flow uses an authorization-code GET callback. In Development, nonce and correlation cookies use `SameSite=Lax` without `Secure` only for HTTP loopback hosts, because older Safari versions reject Secure cookies on HTTP localhost. HTTPS and non-loopback requests retain the framework's Secure cookie defaults. Correlation, nonce validation, and PKCE remain enabled.
+
+Start each sign-in from `http://localhost:5080/login` in the browser that will complete it. Do not copy a Cognito login URL between browsers or reuse a completed callback. A missing or expired login cookie now leads to a safe retry page. Restarting this sample clears the server-side ticket store and requires a fresh sign-in.

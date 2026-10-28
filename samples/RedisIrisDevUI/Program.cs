@@ -255,6 +255,7 @@ if (authenticationRequired)
             options.SignedOutCallbackPath = "/signout-callback-oidc";
             options.ResponseType = "code";
             options.UsePkce = true;
+            LocalOidcLogin.Configure(options, builder.Environment.IsDevelopment());
             options.SaveTokens = true;
             options.UseTokenLifetime = true;
             options.MapInboundClaims = false;
@@ -266,6 +267,7 @@ if (authenticationRequired)
             options.TokenValidationParameters.NameClaimType = "email";
             options.Events = new OpenIdConnectEvents
             {
+                OnRemoteFailure = LocalOidcLogin.HandleRemoteFailure,
                 OnRedirectToIdentityProvider = context =>
                 {
                     context.ProtocolMessage.SetParameter("resource", oidcAudience);
@@ -356,6 +358,7 @@ if (authenticationRequired)
     app.UseAuthorization();
     if (oidcEnabled)
     {
+        app.MapGet("/login-failed", LocalOidcLogin.FailurePage).AllowAnonymous();
         app.MapGet("/login", () => Results.Challenge(
             new AuthenticationProperties { RedirectUri = "/devui/?entity_id=redis-iris-travel-assistant" },
             [TravelAuthentication.OpenIdConnectScheme]));
