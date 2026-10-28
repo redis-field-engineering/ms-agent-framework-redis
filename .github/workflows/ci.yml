@@ -15,7 +15,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
       - run: dotnet restore ms-agent-framework-redis.slnx
       - run: dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
       - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
@@ -23,3 +25,10 @@ jobs:
       - run: dotnet pack src/Redis.Iris.AgentMemory -c Release --no-build -o artifacts
       - run: dotnet pack src/Microsoft.Agents.AI.Redis.Iris -c Release --no-build -o artifacts
       - run: ./eng/validate-packages.sh artifacts
+  sample-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f samples/RedisIrisDevUI/Dockerfile --target context-seeder -t iris-context-tools .
+      - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-model
+      - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-seed
