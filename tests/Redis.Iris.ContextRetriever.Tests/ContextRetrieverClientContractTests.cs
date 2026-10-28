@@ -55,6 +55,20 @@ public sealed class ContextRetrieverClientContractTests
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => factory.ConnectAsync(s_options, "key", cancellation.Token));
+        Assert.True(handler.Disposed);
+    }
+
+    [Fact]
+    public async Task CallerCancellationDuringDiscoveryDisposesTransport()
+    {
+        var handler = new McpContractHandler { BlockToolList = true };
+        var factory = new ContextRetrieverClientFactory(null, () => handler);
+        using var cancellation = new CancellationTokenSource();
+        var connect = factory.ConnectAsync(s_options, "key", cancellation.Token);
+        await handler.ToolListStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connect);
+        Assert.True(handler.Disposed);
     }
 
     [Fact]
@@ -85,6 +99,7 @@ public sealed class ContextRetrieverClientContractTests
 
         Assert.Equal(2, handlers.Count);
         Assert.All(handlers, handler => Assert.Contains("initialize", handler.Methods));
+        Assert.All(handlers, handler => Assert.True(handler.Disposed));
     }
 
     [Fact]
@@ -217,6 +232,9 @@ public sealed class ContextRetrieverClientContractTests
 
     private sealed class McpContractHandler : HttpMessageHandler
     {
+        public bool Disposed { get; private set; }
+        public TaskCompletionSource ToolListStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        protected override void Dispose(bool disposing) { Disposed = true; base.Dispose(disposing); }
         public bool BlockInitialize { get; init; }
         public bool ReturnInvalidToolList { get; init; }
         public bool BlockToolList { get; init; }
@@ -242,7 +260,11 @@ public sealed class ContextRetrieverClientContractTests
 
             if (method == "notifications/initialized") return new(HttpStatusCode.Accepted);
             if (method == "initialize" && BlockInitialize) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            if (method == "tools/list" && BlockToolList) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            if (method == "tools/list")
+            {
+                ToolListStarted.TrySetResult();
+                if (BlockToolList) await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
             if (method == "tools/call")
             {
                 var active = Interlocked.Increment(ref _activeToolCalls);

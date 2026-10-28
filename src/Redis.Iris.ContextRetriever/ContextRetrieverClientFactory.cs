@@ -67,9 +67,11 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         };
 
         McpClient? client = null;
+        HttpClientTransport? transport = null;
+        var ownershipTransferred = false;
         try
         {
-            var transport = CreateTransport(transportOptions);
+            transport = CreateTransport(transportOptions);
             using (var initializeActivity = ContextRetrieverDiagnostics.Start("initialize"))
             {
                 try
@@ -116,19 +118,33 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
 
             ContextRetrieverDiagnostics.ActiveConnection(1);
             var executionGate = new SemaphoreSlim(options.MaximumConcurrentToolExecutions, options.MaximumConcurrentToolExecutions);
-            return new ContextRetrieverClient(client, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
+            var connected = new ContextRetrieverClient(client, transport, tools.Select(tool => (AIFunction)new TracingAIFunction(tool, executionGate, options.ExecutionTimeout)).ToArray(), executionGate);
+            ownershipTransferred = true;
+            return connected;
         }
         catch (ContextRetrieverException)
         {
-            if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
             throw;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             ContextRetrieverDiagnostics.Failed(connectActivity, ex);
             ContextRetrieverDiagnostics.ConnectionFailed();
-            if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
             throw new ContextRetrieverConnectionException("Context Retriever MCP connection failed.", ex);
+        }
+        finally
+        {
+            if (!ownershipTransferred)
+            {
+                // Cancellation must clean up just as failures do. Preserve the original error
+                // if a broken transport also fails during best-effort teardown.
+                try
+                {
+                    try { if (client is not null) await client.DisposeAsync().ConfigureAwait(false); }
+                    finally { if (transport is not null) await transport.DisposeAsync().ConfigureAwait(false); }
+                }
+                catch { }
+            }
         }
     }
 
@@ -150,7 +166,7 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         return new HttpClientTransport(options, httpClient, _loggerFactory, ownsHttpClient: true);
     }
 
-    private sealed class ContextRetrieverClient(McpClient client, IReadOnlyList<AIFunction> tools, SemaphoreSlim executionGate) : IContextRetrieverClient
+    private sealed class ContextRetrieverClient(McpClient client, HttpClientTransport transport, IReadOnlyList<AIFunction> tools, SemaphoreSlim executionGate) : IContextRetrieverClient
     {
         private int _disposed;
         public IReadOnlyList<AIFunction> Tools { get; } = tools;
@@ -158,8 +174,13 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try { await client.DisposeAsync().ConfigureAwait(false); executionGate.Dispose(); }
-            finally { ContextRetrieverDiagnostics.ActiveConnection(-1); }
+            try { await client.DisposeAsync().ConfigureAwait(false); }
+            finally
+            {
+                try { await transport.DisposeAsync().ConfigureAwait(false); }
+                finally { executionGate.Dispose(); ContextRetrieverDiagnostics.ActiveConnection(-1); }
+            }
+
         }
     }
 }
