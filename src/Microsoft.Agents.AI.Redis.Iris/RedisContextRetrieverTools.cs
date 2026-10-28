@@ -21,7 +21,8 @@ public static class RedisContextRetrieverTools
         credential.Validate();
         var delegatedToken = profile.DelegatedTokenProvider is null
             ? null
-            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false);
+            : await profile.DelegatedTokenProvider.GetTokenAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new ContextRetrieverAccessDeniedException("The configured delegated token provider returned no token.");
         delegatedToken?.Validate();
         var policy = options ?? new();
         var client = await clientFactory.ConnectAsync(new()

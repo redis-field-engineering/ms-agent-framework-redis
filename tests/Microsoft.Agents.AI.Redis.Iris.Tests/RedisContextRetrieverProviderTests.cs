@@ -112,6 +112,29 @@ public sealed class RedisContextRetrieverProviderTests
         Assert.Equal("traveler-001", (await tool.InvokeAsync(supplied))?.ToString());
     }
 
+    [Fact]
+    public async Task MissingConfiguredDelegatedTokenFailsClosedForBothEntryPoints()
+    {
+        var profile = new ContextRetrieverAccessProfile(new("https://context.example.test/mcp"), "user",
+            new FixedContextRetrieverCredentialProvider(new("key", "v1")), DelegatedTokenProvider: new MissingTokenProvider());
+        var factory = new NeverConnectFactory();
+        await using var cache = new ContextRetrieverClientCache(factory);
+        var provider = new RedisContextRetrieverProvider(new DelegateContextRetrieverAccessResolver((_, _) => ValueTask.FromResult(profile)), cache);
+        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => provider.InvokingAsync(new(s_agent, null, new())).AsTask());
+        await Assert.ThrowsAsync<ContextRetrieverAccessDeniedException>(() => RedisContextRetrieverTools.ConnectAsync(profile, factory));
+    }
+
+    private sealed class MissingTokenProvider : IContextRetrieverDelegatedTokenProvider
+    {
+        public ValueTask<ContextRetrieverDelegatedToken> GetTokenAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult<ContextRetrieverDelegatedToken>(null!);
+    }
+
+    private sealed class NeverConnectFactory : IContextRetrieverClientFactory
+    {
+        public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Missing delegation must fail before connecting.");
+    }
+
     private sealed class ProfileToolFactory : IContextRetrieverClientFactory
     {
         public Task<IContextRetrieverClient> ConnectAsync(ContextRetrieverClientOptions options, string agentKey, CancellationToken cancellationToken = default)
