@@ -158,14 +158,14 @@ public sealed class ContextRetrieverClientContractTests
     [Fact]
     public async Task MetricsCoverMcpHealthWithoutSensitiveDimensions()
     {
-        var measurements = new List<(string Name, string Tags)>();
+        var measurements = new System.Collections.Concurrent.ConcurrentQueue<(string Name, string Tags)>();
         using var listener = new MeterListener();
         listener.InstrumentPublished = (instrument, meterListener) =>
         {
             if (instrument.Meter.Name == ContextRetrieverDiagnostics.MeterName) meterListener.EnableMeasurementEvents(instrument);
         };
-        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => measurements.Add((instrument.Name, Tags(tags))));
-        listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) => measurements.Add((instrument.Name, Tags(tags))));
+        listener.SetMeasurementEventCallback<long>((instrument, _, tags, _) => measurements.Enqueue((instrument.Name, Tags(tags))));
+        listener.SetMeasurementEventCallback<double>((instrument, _, tags, _) => measurements.Enqueue((instrument.Name, Tags(tags))));
         listener.Start();
 
         var factory = new ContextRetrieverClientFactory(handlerFactory: () => new McpContractHandler(), loggerFactory: null);
