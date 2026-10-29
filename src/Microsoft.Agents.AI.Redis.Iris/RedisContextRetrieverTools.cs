@@ -1,5 +1,7 @@
 using Microsoft.Extensions.AI;
 using Redis.Iris.ContextRetriever;
+using System.Reflection;
+using System.Text.Json;
 
 namespace Microsoft.Agents.AI.Redis.Iris;
 
@@ -37,7 +39,10 @@ public static class RedisContextRetrieverTools
         }, credential.AgentKey, delegatedToken?.Token, cancellationToken).ConfigureAwait(false);
         try
         {
-            return new ContextRetrieverToolLease(client, AuthorizationBoundaryAIFunction.Apply(client.Tools, profile.BoundToolArguments));
+            // Initialization may have outlasted the supplied authorization lifetime.
+            credential.Validate();
+            delegatedToken?.Validate();
+            return new ContextRetrieverToolLease(client, AuthorizationBoundaryAIFunction.Apply(client.Tools, profile.BoundToolArguments), credential, delegatedToken);
         }
         catch
         {
@@ -52,7 +57,12 @@ public sealed class ContextRetrieverToolLease : IAsyncDisposable
 {
     private IContextRetrieverClient? _client;
     private readonly IReadOnlyList<AIFunction> _tools;
-    internal ContextRetrieverToolLease(IContextRetrieverClient client, IReadOnlyList<AIFunction> tools) { _client = client; _tools = tools; }
+    internal ContextRetrieverToolLease(IContextRetrieverClient client, IReadOnlyList<AIFunction> tools,
+        ContextRetrieverCredential credential, ContextRetrieverDelegatedToken? token)
+    {
+        _client = client;
+        _tools = tools.Select(tool => (AIFunction)new LifetimeTool(tool, this, credential, token)).ToArray();
+    }
 
     /// <summary>Server-defined Context Retriever tools.</summary>
     public IReadOnlyList<AIFunction> Tools => _client is not null ? _tools : throw new ObjectDisposedException(nameof(ContextRetrieverToolLease));
@@ -62,5 +72,25 @@ public sealed class ContextRetrieverToolLease : IAsyncDisposable
     {
         var client = Interlocked.Exchange(ref _client, null);
         if (client is not null) await client.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private sealed class LifetimeTool(AIFunction inner, ContextRetrieverToolLease owner,
+        ContextRetrieverCredential credential, ContextRetrieverDelegatedToken? token) : AIFunction
+    {
+        public override string Name => inner.Name;
+        public override string Description => inner.Description;
+        public override JsonElement JsonSchema => inner.JsonSchema;
+        public override JsonElement? ReturnJsonSchema => inner.ReturnJsonSchema;
+        public override JsonSerializerOptions JsonSerializerOptions => inner.JsonSerializerOptions;
+        public override MethodInfo? UnderlyingMethod => inner.UnderlyingMethod;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref owner._client) is null, owner);
+            credential.Validate();
+            token?.Validate();
+            return inner.InvokeAsync(arguments, cancellationToken);
+        }
     }
 }
