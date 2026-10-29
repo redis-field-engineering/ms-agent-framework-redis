@@ -130,12 +130,25 @@ internal sealed class SystemContextCtlProcess(string executablePath) : IContextC
 {
     public async Task<ContextCtlProcessResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var startInfo = new ProcessStartInfo(executablePath) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, CreateNoWindow = true };
         foreach (var argument in arguments) startInfo.ArgumentList.Add(argument);
         using var process = Process.Start(startInfo) ?? throw new ContextCtlException("Unable to start ctxctl.", -1);
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        // Drain both pipes until the process exits, including cancellation teardown.
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            try { process.Kill(entireProcessTree: true); }
+            catch (InvalidOperationException) { /* The process already exited. */ }
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            await Task.WhenAll(stdout, stderr).ConfigureAwait(false);
+            throw;
+        }
         await stderr.ConfigureAwait(false); // Observe but never disclose potentially sensitive CLI output.
         return new(process.ExitCode, await stdout.ConfigureAwait(false));
     }
