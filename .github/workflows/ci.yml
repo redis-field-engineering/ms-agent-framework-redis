@@ -23,6 +23,7 @@ jobs:
       - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
       - run: dotnet test ms-agent-framework-redis.slnx -c Release --no-build
       - run: python3 eng/test-package-validation.py
+      - run: python3 eng/test-release-recovery.py
       - run: ./eng/pack.sh
       - run: ./eng/package-smoke.sh
   sample-container:

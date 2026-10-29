@@ -25,11 +25,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: release-validation
     timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.select.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Validate and select release tag
+        id: select
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
@@ -37,6 +40,7 @@ jobs:
           commit="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
           git merge-base --is-ancestor "$commit" origin/main
           git checkout --detach "$commit"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -47,6 +51,7 @@ jobs:
       - run: dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
       - run: dotnet test ms-agent-framework-redis.slnx -c Release --no-build
       - run: python3 eng/test-package-validation.py
+      - run: python3 eng/test-release-recovery.py
       - run: ./eng/pack.sh
       - name: Verify package version matches tag
         env:
@@ -96,12 +101,16 @@ jobs:
       - name: Remove temporary credentials
         if: always()
         run: rm -f "$RUNNER_TEMP/ram-users.json" "$RUNNER_TEMP/context-users.json"
+      - name: Record validated artifact provenance
+        env:
+          RELEASE_COMMIT: ${{ steps.select.outputs.commit }}
+        run: python3 eng/release-packages.py manifest artifacts/packages --commit "$RELEASE_COMMIT"
       - uses: actions/upload-artifact@v4
         with:
           name: validated-preview-packages
-          path: artifacts/packages/*.nupkg
+          path: artifacts/packages/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
   publish:
     if: inputs.publish
     needs: validate
@@ -119,6 +128,10 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
           name: validated-preview-packages
@@ -126,10 +139,6 @@ jobs:
       - name: Publish the validated dependency set
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
         run: |
-          test -n "$NUGET_API_KEY" || { echo 'Missing NUGET_API_KEY'; exit 1; }
-          for id in Redis.Iris.AgentMemory Redis.Iris.ContextRetriever.Modeling Redis.Iris.ContextRetriever Microsoft.Agents.AI.Redis.Iris; do
-            package="$(find packages -maxdepth 1 -name "$id.[0-9]*.nupkg")"
-            test -f "$package"
-            dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json
-          done
+          python3 eng/release-packages.py publish packages --commit "$RELEASE_COMMIT"

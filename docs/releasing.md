@@ -21,7 +21,36 @@ Create the `release-validation` environment with these secrets. Use dedicated sy
 
 Refresh short-lived tokens before each run with enough remaining lifetime for build and promotion validation. Use the configured authorization-code flow; never manufacture tokens or disable ownership checks to obtain a passing release. Temporary token bundles are mode 0600 and removed in an `always()` step. Do not upload test logs or bundles that might contain customer data or credentials.
 
-Create the `nuget` environment with `NUGET_API_KEY`, scoped to these four package IDs. The publish job consumes the exact artifacts produced by the successful validation job and publishes dependencies before the framework adapter. A partial NuGet upload fails the job; inspect which versions already exist before recovery. The workflow deliberately does not suppress duplicate-version errors or overwrite published packages.
+Create the `nuget` environment with `NUGET_API_KEY`, scoped to these four package IDs. The publish job consumes the exact artifacts produced by the successful validation job and publishes dependencies before the framework adapter. It verifies the manifest and preflights all four existing feed versions before any upload. An existing version is skipped only when every non-signature archive entry matches the validated artifact; NuGet.org's added repository signature and ZIP compression/timestamps are excluded from that comparison. A conflicting version or unavailable feed blocks publication.
+
+## Recover a partial publication
+
+The validation artifact includes `release-manifest.json`, recording the exact source
+commit, package byte hashes, and per-entry content hashes. Keep the four packages
+and manifest together. GitHub retains the artifact for 90 days (subject to repository
+policy); archive it in the release owner's durable storage before expiration.
+
+1. Preserve the failed run ID and its `validated-preview-packages` artifact. Do not
+   rebuild, edit the manifest, move the tag, or silently substitute another run's files.
+2. Allow NuGet indexing to finish after an accepted upload. A just-pushed version
+   can temporarily return 404 from the flat-container feed; a duplicate push still
+   fails safely until the package can be downloaded and compared.
+3. Optionally download the artifact and inspect a read-only plan from the selected
+   release commit: `python3 eng/release-packages.py plan /path/to/packages --commit <full-commit>`.
+   The command verifies local hashes and downloads existing public packages. It
+   never pushes packages or requires a NuGet publishing key.
+4. Use GitHub's **Re-run failed jobs** on that same run, preserving the successful
+   validation job and its artifact. The publish job rechecks public documentation,
+   artifact hashes, and feed contents, then uploads only missing packages in
+   dependency order. Fully published matching sets are successful no-ops.
+5. If an existing version differs, stop and investigate. Release a new version of
+   the complete set through normal validation; do not overwrite or bypass the
+   comparison. If artifacts have expired, recovery requires an owner-reviewed
+   replacement plan, not an automatic rebuild under the old manifest.
+
+The recovery tests use synthetic archives and injected feed/push functions. They
+cover partial and complete publication, signature-only changes, conflicting content,
+local tampering, source-commit mismatch, network failure, and failed-upload ordering.
 
 ## Release record
 
