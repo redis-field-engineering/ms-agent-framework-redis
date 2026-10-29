@@ -4,6 +4,8 @@ Use `RedisContextRetrieverProvider` for most applications. Its access resolver r
 
 The fixed helper is only appropriate when every caller may share one service identity and its complete Context Retriever authorization scope. Keep the returned `ContextRetrieverToolLease` alive for as long as its tools are attached.
 
+The fixed helper captures credentials once when connecting. It rejects calls after the supplied agent-key or delegated-token expiry, including calls through previously retained tools. To rotate or refresh credentials, dispose the old lease and reconnect; use the per-invocation provider when automatic selection of current credentials is required. Expiry rejects new tool invocations. An invocation accepted before expiry may still be queued or executing; the service independently enforces credential validity. Expiry does not roll back an accepted operation. Finish active calls before disposing a fixed lease.
+
 ## Migrating from fixed to per-invocation identity
 
 Keep the shared `RedisContextRetrieverOptions` and client factory/cache. Replace `FixedAccessProfile` with an `AccessResolver` that maps trusted request or session context to `ContextRetrieverAccessProfile`. Then attach the resulting `RedisContextRetrieverProvider` instead of the fixed lease's tools. Do not place agent keys or access-profile choices in tool arguments.
