@@ -149,6 +149,33 @@ public sealed class RedisAgentMemoryClientTests
         await Assert.ThrowsAsync<ArgumentException>(() => client.AddSessionEventAsync(request));
     }
 
+    public static IEnumerable<object[]> UnexpectedErrorBodies()
+    {
+        foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.NotFound, HttpStatusCode.TooManyRequests, HttpStatusCode.ServiceUnavailable })
+            foreach (var body in new[] { "null", "[]", "\"private detail\"", "{\"error\":\"private detail\"}", "{\"error\":null}", "{\"error\":{\"type\":12}}", "{\"error\":{\"type\":null}}", "<html>private detail</html>", "" })
+                yield return [status, body];
+    }
+
+    [Theory]
+    [MemberData(nameof(UnexpectedErrorBodies))]
+    public async Task UnexpectedErrorBodyPreservesStatusAndMissingSessionSemantics(HttpStatusCode status, string body)
+    {
+        var client = CreateClient(new RecordingHandler(_ => JsonResponse(status, body)));
+        var error = await Assert.ThrowsAsync<AgentMemoryException>(() => client.GetSessionMemoryAsync("session"));
+        Assert.Equal(status, error.StatusCode);
+        Assert.Equal("session.get", error.Operation);
+        Assert.Null(error.ErrorCode);
+        Assert.DoesNotContain("private detail", error.ToString());
+
+        if (status == HttpStatusCode.NotFound)
+            Assert.Null(await client.TryGetSessionMemoryAsync("session"));
+        else
+        {
+            var requiredError = await Assert.ThrowsAsync<AgentMemoryException>(() => client.TryGetSessionMemoryAsync("session"));
+            Assert.Equal(status, requiredError.StatusCode);
+        }
+    }
+
     [Fact]
     public async Task RequestsAlwaysUseTheValidatedEndpointInsteadOfClientBaseAddress()
     {

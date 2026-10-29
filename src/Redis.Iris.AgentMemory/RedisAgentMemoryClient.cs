@@ -326,7 +326,9 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         try
         {
             using var body = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), cancellationToken: cancellationToken).ConfigureAwait(false);
-            if (body.RootElement.TryGetProperty("error", out var error) && error.TryGetProperty("type", out var type))
+            if (body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object &&
+                error.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String)
             {
                 errorCode = type.GetString();
             }
