@@ -10,7 +10,8 @@ Redis Field Engineering deployment; it is not a prerequisite for using the packa
 
 ## Tools and local checks
 
-Install the .NET 10 SDK selected by `global.json`, the .NET 8 runtime for the
+Install the .NET 10 SDK selected by `global.json`, the ASP.NET Core 8 runtime
+(which includes the .NET 8 runtime) or the .NET 8 SDK for the samples and
 compatibility tests, and Python 3 for packaging helpers. Docker with Compose is
 needed only for the container sample and Docker-context regression.
 
@@ -60,7 +61,9 @@ Use dedicated synthetic resources with narrow permissions and short retention.
 
 ```bash
 ./scripts/run-agent-memory-demo.sh full
-./scripts/run-agent-memory-devui.sh
+test -f artifacts/context-retriever/redis-iris-travel-users.json
+DEVUI_USERS_FILE="$PWD/artifacts/context-retriever/redis-iris-travel-users.json" \
+  ./scripts/run-agent-memory-devui.sh
 ```
 
 The persistent demo requires RAM and a model key. DevUI additionally requires a
@@ -68,7 +71,11 @@ compatible travel Context Retriever surface; follow its [provisioning and seedin
 instructions](samples/RedisIrisDevUI/README.md#provision-the-managed-context-retriever-surface).
 These are explicit administrative operations against your chosen surface.
 For a different saved shell profile, set `REDIS_IRIS_ENV_FILE` to its path.
-Open the native DevUI at http://localhost:5080. Stop it with Ctrl-C.
+The explicit user-bundle setting enables native multi-user login and matches the
+seeded travelers; Compose supplies that setting automatically. Open the native
+DevUI at http://localhost:5080/login and use a local sign-in token from the
+generated bundle. Inspect it privately; do not paste the file into logs or chat.
+Stop the process with Ctrl-C.
 
 Generate the travel model and synthetic records without any service credentials:
 

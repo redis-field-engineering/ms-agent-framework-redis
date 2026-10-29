@@ -13,7 +13,7 @@ No Terraform or Helm deployment is needed.
 
 ## Connect and configure
 
-Prerequisites: .NET 10 SDK, .NET 8 runtime, Python 3.9+, kubectl, gcloud, the GKE authentication plugin,
+Prerequisites: .NET 10 SDK, ASP.NET Core 8 runtime (or .NET 8 SDK), Python 3.9+, kubectl, gcloud, the GKE authentication plugin,
 and access to the cluster. Keep your OpenAI application key in `.env.local` or
 export `OPENAI_API_KEY`; the setup imports only `OPENAI_API_KEY` and `OPENAI_MODEL`
 from that file, never its Cloud endpoints or Iris credentials.
