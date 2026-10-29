@@ -8,7 +8,7 @@ Agent Memory supports appending and reading session events, reading summaries, s
 
 The default message mapper stores text-only user and assistant messages. System messages are opt-in. Tool calls/results, images, audio, and mixed-content messages on supported roles are skipped unless an explicit text projection is configured. Unsupported roles are always skipped before content projection. It cannot reconstruct a full tool or multimodal transcript. Observe skipped-message metrics before relying on durable reconstruction.
 
-Context Retriever discovers and invokes server-defined MCP tools, binds trusted arguments, and supports fixed service identities or a per-invocation access resolver. The modeling package exports and compares DataModels; deployment still requires a compatible `ctxctl`. Model comparison reports contract changes; it does not prove a migration safe for existing data or apply data migrations.
+Context Retriever discovers and invokes server-defined MCP tools, binds trusted arguments, and supports fixed service identities or a per-invocation access resolver. The modeling package exports and compares DataModels; the optional `Redis.Iris.ContextRetriever.Management` package creates, reads, and updates surfaces directly over the administrative HTTP API. It is not a dependency of the runtime integration. Model comparison reports contract changes; it does not prove a migration safe for existing data or apply data migrations.
 
 ## Persistence and retry semantics
 
@@ -45,4 +45,4 @@ The connector and samples do not provide a complete privacy-erasure workflow. Su
 
 ## Publication requirements
 
-A public preview requires the four-package closure and isolated consumer check, both supported runtime test suites, positive managed/session-promotion and Context Retriever live checks, and the signed-user RAM isolation gate. Missing credentials or skipped live tests are not passing evidence. Versioned releases remain preview until broader recovery, lifecycle, service-compatibility, and API-stability requirements have their own evidence. See [TESTING.md](../TESTING.md) for the current validation record.
+A public preview requires the five-package closure and isolated consumer check, both supported runtime test suites, positive managed/session-promotion and Context Retriever live checks, and the signed-user RAM isolation gate. Missing credentials or skipped live tests are not passing evidence. Versioned releases remain preview until broader recovery, lifecycle, service-compatibility, and API-stability requirements have their own evidence. See [TESTING.md](../TESTING.md) for the current validation record.

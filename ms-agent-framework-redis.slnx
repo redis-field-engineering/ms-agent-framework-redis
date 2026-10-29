@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Redis.Iris.ContextRetriever.Management/Redis.Iris.ContextRetriever.Management.csproj" />
     <Project Path="src/Redis.Iris.ContextRetriever.Modeling/Redis.Iris.ContextRetriever.Modeling.csproj" />
     <Project Path="src/Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
     <Project Path="src/Redis.Iris.AgentMemory/Redis.Iris.AgentMemory.csproj" />
     <Project Path="src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Redis.Iris.ContextRetriever.Management.Tests/Redis.Iris.ContextRetriever.Management.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.Modeling.Tests/Redis.Iris.ContextRetriever.Modeling.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.Tests/Redis.Iris.ContextRetriever.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.LiveTests/Redis.Iris.ContextRetriever.LiveTests.csproj" />

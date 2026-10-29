@@ -14,7 +14,7 @@ cd IrisDemo
 dotnet add package Microsoft.Agents.AI.Redis.Iris --version 0.1.0-preview.1
 ```
 
-Until publication, build the four packages with `./eng/pack.sh` from a source checkout and add the resulting `artifacts/packages` directory as a NuGet source. Keep NuGet.org enabled for external dependencies. The adapter brings in the Agent Memory, Context Retriever, and modeling packages transitively. Applications using only the REST client can install `Redis.Iris.AgentMemory` instead.
+Until publication, build the five packages with `./eng/pack.sh` from a source checkout and add the resulting `artifacts/packages` directory as a NuGet source. Keep NuGet.org enabled for external dependencies. The adapter brings in the Agent Memory, Context Retriever, and modeling packages transitively. Surface administration requires explicitly adding the optional `Redis.Iris.ContextRetriever.Management` package. Applications using only the Agent Memory REST client can install `Redis.Iris.AgentMemory` instead.
 
 Supply these environment settings through your shell or secret manager; the snippets do not read a repository `.env` file:
 

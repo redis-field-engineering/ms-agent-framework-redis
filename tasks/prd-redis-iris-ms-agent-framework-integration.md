@@ -69,7 +69,7 @@ Both entry points will use the same local MCP client, authentication, connection
 - [x] Entity, field, key-template, index, vector, categorical, and relationship validation fails before deployment.
 - [x] JSON output is deterministic, contains no credentials, and is accepted through `ctxctl surface create --datamodel`.
 - [x] Additive and destructive model changes can be classified for CI review.
-- [x] The privileged deployment wrapper checks CLI compatibility and uses ctxctl's stored admin authentication.
+- [x] The optional management package creates, reads, and updates surfaces directly over HTTP using an explicit admin credential provider; runtime packages do not depend on it.
 - [x] Optional typed application reads use only tools discovered for the active agent-key scope.
 - [x] Documentation and a runnable travel-domain sample cover generation and deployment.
 

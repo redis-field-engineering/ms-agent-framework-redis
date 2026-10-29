@@ -1,4 +1,5 @@
 using Redis.Iris.ContextRetriever.Modeling;
+using Redis.Iris.ContextRetriever.Management;
 
 var model = ContextModelCompiler.Compile(
     "Travel assistant",
@@ -15,8 +16,15 @@ if (args.Contains("--deploy", StringComparer.Ordinal))
 {
     var redisAddress = Environment.GetEnvironmentVariable("CONTEXT_RETRIEVER_REDIS_ADDRESS")
         ?? throw new InvalidOperationException("Set CONTEXT_RETRIEVER_REDIS_ADDRESS.");
-    var deployer = new ContextCtlSurfaceDeployer();
-    var result = await deployer.CreateAsync(model, new()
+    var endpoint = Environment.GetEnvironmentVariable("CONTEXT_RETRIEVER_MANAGEMENT_ENDPOINT")
+        ?? throw new InvalidOperationException("Set CONTEXT_RETRIEVER_MANAGEMENT_ENDPOINT to the service base URL (without /mcp).");
+    var adminKey = Environment.GetEnvironmentVariable("CONTEXT_RETRIEVER_ADMIN_API_KEY")
+        ?? throw new InvalidOperationException("Set CONTEXT_RETRIEVER_ADMIN_API_KEY.");
+    using var http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
+    var management = new ContextRetrieverManagementClient(http, new() { Endpoint = new Uri(endpoint) },
+        new FixedContextRetrieverManagementCredentialProvider(adminKey));
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+    var result = await management.CreateSurfaceAsync(model, new()
     {
         Name = "travel-assistant",
         Description = model.Description,
@@ -24,7 +32,7 @@ if (args.Contains("--deploy", StringComparer.Ordinal))
         RedisUsername = Environment.GetEnvironmentVariable("CONTEXT_RETRIEVER_REDIS_USERNAME"),
         RedisPassword = Environment.GetEnvironmentVariable("CONTEXT_RETRIEVER_REDIS_PASSWORD"),
         RedisTls = true,
-    });
+    }, cancellation.Token);
     Console.WriteLine($"Created surface {result.SurfaceId} ({result.Status}).");
 }
 

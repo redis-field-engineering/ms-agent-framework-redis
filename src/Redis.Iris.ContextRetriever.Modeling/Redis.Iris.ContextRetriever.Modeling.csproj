@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Annotated POCO modeling and ctxctl deployment for Redis Iris Context Retriever.</Description>
+    <Description>Annotated POCO modeling, serialization, and comparison for Redis Iris Context Retriever.</Description>
     <PackageId>Redis.Iris.ContextRetriever.Modeling</PackageId>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

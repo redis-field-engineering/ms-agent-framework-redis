@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Redis.Iris.ContextRetriever.Modeling/Redis.Iris.ContextRetriever.Modeling.csproj" />
+    <ProjectReference Include="../../src/Redis.Iris.ContextRetriever.Management/Redis.Iris.ContextRetriever.Management.csproj" />
   </ItemGroup>
 </Project>

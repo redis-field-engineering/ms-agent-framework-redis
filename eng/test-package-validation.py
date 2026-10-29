@@ -11,12 +11,13 @@ spec.loader.exec_module(validator)
 
 
 class PackageValidationTests(unittest.TestCase):
-    def create(self, directory, missing=None, dependency_version="0.1.0-preview.1", secret=False):
+    def create(self, directory, missing=None, dependency_version="0.1.0-preview.1", secret=False,
+               dependency_id="Redis.Iris.AgentMemory"):
         for package_id in validator.EXPECTED - {missing}:
             with ZipFile(Path(directory) / f"{package_id}.nupkg", "w") as archive:
                 archive.writestr(f"{package_id}.nuspec", f'''<package><metadata>
 <id>{package_id}</id><version>0.1.0-preview.1</version><dependencies><group>
-<dependency id="Redis.Iris.AgentMemory" version="{dependency_version}" />
+<dependency id="{dependency_id}" version="{dependency_version}" />
 </group></dependencies></metadata></package>''')
                 archive.writestr(f"lib/net8.0/{package_id}.dll", b"test-secret" if secret else b"fixture")
 
@@ -31,6 +32,12 @@ class PackageValidationTests(unittest.TestCase):
                 self.create(directory, missing=package_id)
                 with self.assertRaisesRegex(ValueError, "Missing release packages"):
                     validator.validate(directory)
+
+    def test_management_cannot_be_a_transitive_dependency(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.create(directory, dependency_id="Redis.Iris.ContextRetriever.Management")
+            with self.assertRaisesRegex(ValueError, "Management must remain optional"):
+                validator.validate(directory)
 
     def test_wrong_dependency_and_secret_are_rejected(self):
         for options, message in [({"dependency_version": "0.0.1"}, "Dependency version mismatch"),

@@ -5,7 +5,7 @@ using System.Text.Json;
 
 if (args.Length != 1) throw new ArgumentException("Usage: PackageSymbols <package-directory>");
 var packages = Directory.GetFiles(args[0], "*.nupkg");
-if (packages.Length != 4) throw new InvalidDataException("Expected four release packages.");
+if (packages.Length != 5) throw new InvalidDataException("Expected five release packages.");
 var embeddedSourceKind = new Guid("0e8a571b-6926-466e-b4ad-8ab04611f5fe");
 var sourceLinkKind = new Guid("cc110556-a091-4d38-9fec-25ab9a351a6a");
 foreach (var package in packages)
