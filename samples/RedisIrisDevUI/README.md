@@ -14,7 +14,7 @@ through loopback port forwards and provisions its own travel surface and user ke
 Start with the repository root `.env.example` and fill the RAM endpoint/store/key, model key, and Context Retriever endpoint/key in `.env.local`. Provision the travel surface and seed its synthetic records as described below before running DevUI. Then run:
 
 ```bash
-test -f artifacts/context-retriever/redis-iris-travel-users.json
+test -f artifacts/context-retriever/redis-iris-travel-users.json &&
 DEVUI_USERS_FILE="$PWD/artifacts/context-retriever/redis-iris-travel-users.json" \
   ./scripts/run-agent-memory-devui.sh
 ```

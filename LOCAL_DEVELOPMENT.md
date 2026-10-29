@@ -61,7 +61,7 @@ Use dedicated synthetic resources with narrow permissions and short retention.
 
 ```bash
 ./scripts/run-agent-memory-demo.sh full
-test -f artifacts/context-retriever/redis-iris-travel-users.json
+test -f artifacts/context-retriever/redis-iris-travel-users.json &&
 DEVUI_USERS_FILE="$PWD/artifacts/context-retriever/redis-iris-travel-users.json" \
   ./scripts/run-agent-memory-devui.sh
 ```
