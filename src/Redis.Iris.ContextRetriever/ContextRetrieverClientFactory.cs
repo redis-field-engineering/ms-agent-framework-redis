@@ -12,13 +12,20 @@ public sealed class ContextRetrieverClientFactory : IContextRetrieverClientFacto
     private readonly ILoggerFactory? _loggerFactory;
     private readonly Func<HttpMessageHandler>? _handlerFactory;
 
-    /// <summary>Creates a factory with optional MCP SDK logging.</summary>
+    /// <summary>Creates a factory with MCP SDK payload logging disabled.</summary>
+    /// <remarks>Use the explicit sensitive-logging overload to forward SDK logs to the supplied factory.</remarks>
     public ContextRetrieverClientFactory(ILoggerFactory? loggerFactory = null)
         : this(loggerFactory, null) { }
 
-    internal ContextRetrieverClientFactory(ILoggerFactory? loggerFactory, Func<HttpMessageHandler>? handlerFactory)
+    /// <summary>Creates a factory with an explicit opt-in to potentially sensitive MCP SDK logs.</summary>
+    /// <remarks>SDK trace logs may include full tool arguments and results. Enable only with synthetic data and controlled sinks.</remarks>
+    public ContextRetrieverClientFactory(ILoggerFactory? loggerFactory, bool enableSensitiveLogging)
+        : this(loggerFactory, null, enableSensitiveLogging) { }
+
+    internal ContextRetrieverClientFactory(ILoggerFactory? loggerFactory, Func<HttpMessageHandler>? handlerFactory,
+        bool enableSensitiveLogging = false)
     {
-        _loggerFactory = loggerFactory;
+        _loggerFactory = enableSensitiveLogging ? loggerFactory : null;
         _handlerFactory = handlerFactory;
     }
 
