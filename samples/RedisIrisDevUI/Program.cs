@@ -360,7 +360,7 @@ if (authenticationRequired)
     {
         app.MapGet("/login-failed", LocalOidcLogin.FailurePage).AllowAnonymous();
         app.MapGet("/login", () => Results.Challenge(
-            new AuthenticationProperties { RedirectUri = "/devui/?entity_id=redis-iris-travel-assistant" },
+            new AuthenticationProperties { RedirectUri = "/" },
             [TravelAuthentication.OpenIdConnectScheme]));
         app.MapPost("/logout", async (HttpContext httpContext) =>
         {
@@ -374,27 +374,13 @@ if (authenticationRequired)
         }).RequireAuthorization().DisableAntiforgery();
         if (accessTokenInspectorEnabled)
         {
+            app.MapGet("/debug/jwt/fresh", LocalAccessTokenInspector.FreshDownload);
             app.MapGet("/debug/jwt", async (HttpContext httpContext) =>
             {
-                httpContext.Response.Headers.CacheControl = "no-store, max-age=0";
-                httpContext.Response.Headers.Pragma = "no-cache";
-                httpContext.Response.Headers.Expires = "0";
                 var accessToken = await httpContext.GetTokenAsync(
                     CookieAuthenticationDefaults.AuthenticationScheme,
                     "access_token");
-                if (string.IsNullOrWhiteSpace(accessToken))
-                {
-                    return Results.Problem("The authenticated ticket does not contain an access token.");
-                }
-
-                var inspected = TravelAuthentication.InspectAccessToken(accessToken);
-                return Results.Json(new
-                {
-                    warning = "Development-only output. This bearer token grants access until it expires; do not share or persist it.",
-                    accessToken = inspected.Token,
-                    header = inspected.Header,
-                    claims = inspected.Claims,
-                });
+                return LocalAccessTokenInspector.Inspect(httpContext, accessToken);
             }).RequireAuthorization();
         }
     }
@@ -596,6 +582,7 @@ static string Dashboard(
     <head><meta charset="utf-8"><title>Redis Iris + Microsoft Agent Framework</title></head>
     <body style="font-family:system-ui;max-width:850px;margin:3rem auto;padding:0 1rem;line-height:1.5">
       <h1>Redis Iris + Microsoft Agent Framework</h1>
+      {{(multiUser ? "<form method=\"post\" action=\"/logout\"><button type=\"submit\">Sign out</button></form>" : "")}}
       <p>This local sample hosts a travel assistant in Microsoft's official DevUI, persists its memory in Redis Agent Memory, and defines structured travel context for Redis Context Retriever.</p>
       <dl>
         <dt><strong>Tenant</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.TenantId)}}</code></dd>
@@ -622,11 +609,10 @@ static string Dashboard(
         <li><a href="/api/context/status">View the runtime MCP connection status</a></li>
       </ul>
       <p>The agent receives the surface's authorized MCP tools on every invocation. The model and example endpoints do not provision a surface or write records.</p>
-      {{(accessTokenInspectorEnabled ? "<h2>JWT inspection</h2><p><a href=\"/debug/jwt\">View the exact delegated access token and decoded claims</a>. Treat the returned bearer token as a secret.</p>" : "")}}
+      {{(accessTokenInspectorEnabled ? "<h2>JWT inspection</h2><p><a href=\"/debug/jwt\">View the exact delegated access token and decoded claims</a> or <a href=\"/debug/jwt/fresh\">sign in again and download a fresh token</a>. Treat the returned bearer token as a secret.</p>" : "")}}
       <h2>Cleanup</h2>
       <p>Delete both memory tiers with an explicit owner confirmation:</p>
       <pre>curl -X DELETE 'http://localhost:5080/api/ram?confirm={{Uri.EscapeDataString(user.RamOwnerId)}}'</pre>
-      {{(multiUser ? "<form method=\"post\" action=\"/logout\"><button type=\"submit\">Sign out</button></form>" : "")}}
       <p><strong>Development only:</strong> this sample intentionally refuses to run outside the Development environment.</p>
     </body>
     </html>

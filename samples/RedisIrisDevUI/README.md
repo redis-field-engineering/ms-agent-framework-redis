@@ -157,6 +157,8 @@ The overlay reads non-secret OIDC values from Terraform state and the tenant age
 
 The generated JWT demo overlay enables the development-only `/debug/jwt` route. It requires the authenticated session cookie and returns the exact delegated bearer token together with its decoded header and claims. Responses are marked `no-store`. Disable `DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR` after inspection, and never enable this route in a production application.
 
+For live-test token files, open `/debug/jwt/fresh` in each user's browser. This starts a new authorization-code flow and then downloads `delegated-jwt.json` from the updated authenticated session. Rename each download for its user; do not save an old inspector tab, which can still display an expired token. Keep these files private and delete them after testing. OIDC sign-in now lands on the sample dashboard (`/`), with **Sign out** at the top and a link to the chat UI.
+
 OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
 
 ## Run the Docker observability demo
