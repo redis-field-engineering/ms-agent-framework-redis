@@ -46,3 +46,10 @@ Run `ctxctl auth login` or create/store the default admin key before deployment.
 ## Typed application reads
 
 `ContextRetrieverTypedClient` uses only tools discovered in an already authorized MCP session. `GetByIdAsync<T>` resolves the generated get tool from the registered model, while `InvokeAsync<T>` supports other generated tools. Typed access does not bypass agent-key access tags or provide arbitrary Redis queries.
+
+Cancellation of `CreateAsync` terminates the running local `ctxctl` process tree
+and waits for process/output cleanup before removing the temporary manifest.
+Output draining remains cancelable after the parent exits. Descendants that
+detach or outlive an already-exited parent are outside .NET's process-tree
+termination guarantee. Cancellation cannot undo a deployment request already
+accepted by the service; inspect for an existing surface before retrying.
