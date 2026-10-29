@@ -92,14 +92,14 @@ public sealed class ManagedAgentMemoryLiveTests
             var memory = new RedisIrisMemoryProvider(
                 new RedisIrisLongTermMemorySearch(client),
                 _ => state,
-                new() { Search = new() { Limit = 5 } });
+                new() { FailClosed = true, Search = new() { Limit = 5 } });
             var withRecall = (await memory.InvokingAsync(new(
                 s_agent,
                 null,
                 [new ChatMessage(ChatRole.User, "What seat do I prefer?")]))).ToList();
 
-            // Promotion is asynchronous. This verifies the real search endpoint and mandatory owner scope;
-            // a newly created session is allowed to have no promoted memories yet.
+            // FailClosed makes endpoint failures fail this test. Empty recall is allowed here;
+            // the separate populated-memory and promotion gates prove owner isolation and recall.
             Assert.NotEmpty(withRecall);
             Assert.Equal("What seat do I prefer?", withRecall[0].Text);
         }
