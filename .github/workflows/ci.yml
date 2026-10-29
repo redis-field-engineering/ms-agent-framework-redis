@@ -29,6 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - run: python3 eng/test-docker-context.py
       - run: docker build -f samples/RedisIrisDevUI/Dockerfile --target context-seeder -t iris-context-tools .
       - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-model
       - run: docker run --rm --entrypoint dotnet iris-context-tools /app/publish/RedisIrisDevUI.dll --print-context-seed

@@ -8,6 +8,12 @@
 **/TestResults
 artifacts
 secrets
+infra
+**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/*.tfvars.json
 **/__pycache__
 *.user
 *.suo
