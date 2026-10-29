@@ -28,7 +28,13 @@ public sealed class DelegatedAgentMemoryLiveTests
             {
                 var other = 1 - i;
                 await DeniedAsync(() => clients[i].GetSessionMemoryAsync(sessions[other]), HttpStatusCode.NotFound);
-                await DeniedAsync(() => clients[i].DeleteSessionMemoryAsync(sessions[other]), HttpStatusCode.NotFound);
+                var beforeDelete = await clients[other].GetSessionMemoryAsync(sessions[other]);
+                // An inaccessible session can be reported as absent or silently ignored
+                // by an idempotent DELETE. In either case its owner must see it unchanged.
+                try { await clients[i].DeleteSessionMemoryAsync(sessions[other]); }
+                catch (AgentMemoryException error) when (error.StatusCode == HttpStatusCode.NotFound) { }
+                var afterDelete = await clients[other].GetSessionMemoryAsync(sessions[other]);
+                Assert.Equal(JsonSerializer.Serialize(beforeDelete), JsonSerializer.Serialize(afterDelete));
                 var foreign = await clients[i].ListSessionsAsync(users[other].Subject);
                 Assert.DoesNotContain(sessions[other], foreign.Items);
                 var own = await clients[i].ListSessionsAsync(users[i].Subject);

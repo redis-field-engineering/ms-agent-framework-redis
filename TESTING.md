@@ -36,7 +36,7 @@ dotnet test tests/Redis.Iris.AgentMemory.LiveTests --filter FullyQualifiedName~D
 ```
 
 It checks personal session creation/read/list/delete isolation, forged initial
-actors, missing/invalid user tokens, and invalid agent keys. A separate test seeds one LTM record under each signed user, requires positive own-user reads, and proves foreign-owner searches return no records. It deletes only fixture IDs created by that run.
+actors, missing/invalid user tokens, and invalid agent keys. A cross-user session delete may return 404 or succeed as an idempotent no-op; the test requires the rightful owner to read the complete, unchanged session afterward in either case. A separate test seeds one LTM record under each signed user, requires positive own-user reads, and proves foreign-owner searches return no records. It deletes only fixture IDs created by that run.
 
 The release quality gate is:
 
@@ -68,6 +68,8 @@ The runner rejects missing settings, skipped tests, empty runs, and failures. Ea
 
 LTM fixtures use random IDs and synthetic owners/topics, track IDs before bulk creation, inspect per-item responses, and delete known fixture records in `finally`/async disposal. The promotion test deletes its session and searches for records under its unique owner even after a failed assertion. Background jobs can finish after cleanup; use short retention on the dedicated test store and inspect/drain it before disposal. This test cleanup is not a complete erasure API or an erasure guarantee.
 
-Validation on October 28, 2026: the managed Context Retriever gate passed all three tests with the existing scoped-key fixture. The self-managed RAM gate passed all five tests, including promotion and provider recall, within the eight-minute limit (about two to four minutes observed). The user elected to leave delegated-JWT validation pending; that gate must pass before publishing.
+Validation on October 28, 2026: the managed Context Retriever gate passed all three tests with the existing scoped-key fixture. The self-managed RAM gate passed all five tests, including promotion and provider recall, within the eight-minute limit (about two to four minutes observed).
+
+Validation on October 29, 2026: fresh Cognito authorization-code access tokens for two distinct demo users passed all three delegated RAM tests and all three Context Retriever tests in delegated-JWT mode against the self-managed deployment, using .NET 10. Neither gate skipped tests. Cross-user RAM reads returned 404; cross-user session deletes returned 204 without changing the owner's session, verified in both directions. The RAM gate now checks that preservation explicitly. Signed-user validation is complete for this deployment; the release workflow must still rerun the required gates against the selected version tag.
 
 The package gate requires all four release packages at one version, validates internal dependency versions, and restores a standalone .NET 10 consumer from a fresh package cache. Source mapping restricts all connector dependencies to the newly built feed. NuGet.org supplies only external dependencies. The smoke program loads public types from all four packages.
