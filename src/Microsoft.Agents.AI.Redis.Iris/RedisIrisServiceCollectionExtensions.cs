@@ -75,6 +75,8 @@ public static class RedisIrisServiceCollectionExtensions
         services.AddSingleton(options);
         services.AddSingleton(credentialProvider);
         services.AddHttpClient("Redis.Iris.AgentMemory", client => client.BaseAddress = options.Endpoint)
+            // Default HTTP loggers include session IDs in request paths.
+            .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false })
             .RedactLoggedHeaders(["Authorization", "X-Iris-User-Token"]);
         services.AddSingleton<IRedisAgentMemoryClient>(provider => new RedisAgentMemoryClient(
