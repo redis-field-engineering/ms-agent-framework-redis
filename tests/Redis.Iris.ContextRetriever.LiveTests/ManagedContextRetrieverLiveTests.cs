@@ -43,16 +43,19 @@ public sealed class ManagedContextRetrieverLiveTests
     public async Task GetByIdCannotCrossTheScopedTravelerBoundary()
     {
         var configuration = ContextLiveConfiguration.Load();
-        var first = configuration.Users[0];
-        var second = configuration.Users[1];
-        await using var client = await configuration.ConnectAsync(first);
-        var typed = new ContextRetrieverTypedClient(client, TestModel.Model);
+        for (var i = 0; i < 2; i++)
+        {
+            var first = configuration.Users[i];
+            var second = configuration.Users[1 - i];
+            await using var client = await configuration.ConnectAsync(first);
+            var typed = new ContextRetrieverTypedClient(client, TestModel.Model);
 
-        var own = await typed.GetByIdAsync<TravelerRecord>(first.TravelerId);
-        Assert.NotNull(own);
-        Assert.Equal(first.TravelerId, own.TravelerId);
+            var own = await typed.GetByIdAsync<TravelerRecord>(first.TravelerId);
+            Assert.NotNull(own);
+            Assert.Equal(first.TravelerId, own.TravelerId);
 
-        await Assert.ThrowsAsync<ContextRetrieverException>(() => typed.GetByIdAsync<TravelerRecord>(second.TravelerId));
+            await Assert.ThrowsAsync<ContextRetrieverException>(() => typed.GetByIdAsync<TravelerRecord>(second.TravelerId));
+        }
     }
 
     [ContextLiveFact]
@@ -83,7 +86,7 @@ public sealed class ManagedContextRetrieverLiveTests
         var get = Assert.IsAssignableFrom<AIFunction>(tools.Single(tool => tool.Name == "get_traveler_by_id"));
         Assert.False(get.JsonSchema.GetProperty("properties").TryGetProperty("id", out _));
 
-        var result = await get.InvokeAsync(new(new Dictionary<string, object?> { ["id"] = "17redistraveldemo12traveler001" }));
+        var result = await get.InvokeAsync(new(new Dictionary<string, object?> { ["id"] = configuration.Users[1].TravelerId }));
         var traveler = ExtractTextPayload(result).Deserialize<TravelerRecord>(JsonOptions);
         Assert.NotNull(traveler);
         Assert.Equal(user.TravelerId, traveler.TravelerId);
@@ -100,7 +103,19 @@ public sealed class ManagedContextRetrieverLiveTests
             ["tag_conditions"] = new[] { new { field = "traveler_id", value = user.TravelerId } },
         });
         var filteredResult = await filter.InvokeAsync(authorizedFilter);
-        Assert.NotNull(filteredResult);
+        var ownPage = ExtractTextPayload(filteredResult).Deserialize<TravelerPage>(JsonOptions);
+        Assert.NotNull(ownPage);
+        var ownTraveler = Assert.Single(ownPage.Results);
+        Assert.Equal(user.TravelerId, ownTraveler.TravelerId);
+        Assert.Equal(user.TenantId, ownTraveler.TenantId);
+
+        var foreignResult = await filter.InvokeAsync(new(new Dictionary<string, object?>
+        {
+            ["tag_conditions"] = new[] { new { field = "traveler_id", value = configuration.Users[1].TravelerId } },
+        }));
+        var foreignPage = ExtractTextPayload(foreignResult).Deserialize<TravelerPage>(JsonOptions);
+        Assert.NotNull(foreignPage);
+        Assert.Empty(foreignPage.Results);
     }
 
     private static JsonElement ExtractTextPayload(object? result)
@@ -173,6 +188,10 @@ internal sealed record ContextLiveConfiguration(
             item.TryGetProperty("contextRetrieverDelegatedToken", out var token) ? token.GetString() : null,
             item.TryGetProperty("contextRetrieverDelegatedTokenVersion", out var tokenVersion) ? tokenVersion.GetString() : null,
             item.TryGetProperty("contextRetrieverDelegatedTokenExpiresAt", out var expiresAt) ? expiresAt.GetDateTimeOffset() : null)).ToArray();
+        Assert.True(users.Length >= 2, "At least two synthetic users are required.");
+        Assert.Equal(users.Length, users.Select(user => user.TravelerId).Distinct(StringComparer.Ordinal).Count());
+        Assert.True(users.Select(user => (user.AgentKey, user.DelegatedToken)).Distinct().Count() == users.Length,
+            "Each synthetic user must have distinct scoped credentials or a distinct delegated token.");
         return new(
             new Uri(Environment.GetEnvironmentVariable("REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT")!),
             users);
