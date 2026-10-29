@@ -6,12 +6,12 @@ The hosted agent uses Agent Framework's in-memory session store so each DevUI co
 
 ## Run
 
-For the existing Iris GKE cluster, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
+For authorized Redis Field Engineering developers using the internal Iris GKE cluster, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
 The native runner defaults to Redis Cloud in `.env.local`; set
 `REDIS_IRIS_ENV_FILE=secrets/iris-k8s.env` to select Kubernetes. That profile runs on the host
 through loopback port forwards and provisions its own travel surface and user keys.
 
-Add `OPENAI_API_KEY` to the repository root `.env.local`, then run:
+Start with the repository root `.env.example` and fill the RAM endpoint/store/key, model key, and Context Retriever endpoint/key in `.env.local`. Provision the travel surface and seed its synthetic records as described below before running DevUI. Then run:
 
 ```bash
 ./scripts/run-agent-memory-devui.sh

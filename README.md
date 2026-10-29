@@ -9,7 +9,7 @@ Start with the [standalone .NET quickstart](https://github.com/redis-field-engin
 - [Integration design](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/INTEGRATION_DESIGN.md)
 - [Product requirements and story backlog](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/tasks/prd-redis-iris-ms-agent-framework-integration.md)
 - [Local integration environment](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LOCAL_DEVELOPMENT.md)
-- [Run samples against the Iris Kubernetes cluster](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/kubernetes-samples.md)
+- [Internal Kubernetes sample setup (requires Redis access)](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/kubernetes-samples.md)
 - [Security model](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/SECURITY.md)
 - [Preview guarantees and limitations](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/operational-contract.md)
 - [Observability](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/OBSERVABILITY.md)

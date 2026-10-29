@@ -1,4 +1,9 @@
-# Run the samples against Iris on Kubernetes
+# Internal sample setup: Iris on Kubernetes
+
+This guide requires access to Redis Field Engineering’s internal infrastructure
+repository and shared demonstration cluster. It is optional and is not a public
+package prerequisite. For your own service, use the [standalone quickstart](quickstart.md)
+and public [Redis Iris deployment documentation](https://redis.io/docs/latest/develop/ai/context-engine/).
 
 The native sample runners use the existing `iris-demo` GKE deployment in project
 `central-beach-194106`, region `us-east1`, namespace `redis-iris`. The deployment
@@ -8,7 +13,7 @@ No Terraform or Helm deployment is needed.
 
 ## Connect and configure
 
-Prerequisites: .NET 8, Python 3.9+, kubectl, gcloud, the GKE authentication plugin,
+Prerequisites: .NET 10 SDK, .NET 8 runtime, Python 3.9+, kubectl, gcloud, the GKE authentication plugin,
 and access to the cluster. Keep your OpenAI application key in `.env.local` or
 export `OPENAI_API_KEY`; the setup imports only `OPENAI_API_KEY` and `OPENAI_MODEL`
 from that file, never its Cloud endpoints or Iris credentials.
@@ -185,9 +190,9 @@ On October 26, 2026, the user confirmed a real Cognito sign-in and the query
 “Remember that my preferred seat is a window seat. What is my name and home
 airport?” succeeded with RAM delegation enabled against the isolated deployment.
 The application log showed two initialized RAM sessions, no failure entries,
-and no RAM HTTP errors. This validates the signed-user DevUI flow; the automated
-two-user isolation suite and asynchronous memory promotion remain separate,
-uncompleted checks.
+and no RAM HTTP errors. This was DevUI evidence only. Subsequent managed promotion
+and two-user signed isolation results are recorded in [TESTING.md](../TESTING.md);
+release validation must rerun the required gates for the selected tag.
 
 The persistent memory demo uses the same explicitly selected profile:
 

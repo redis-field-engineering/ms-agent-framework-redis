@@ -1,168 +1,94 @@
-# Local integration environment
+# Local development
 
-## Decision
+Use the [standalone quickstart](docs/quickstart.md) for a small application, or the
+commands below to develop this repository. Redis service provisioning is separate
+from the .NET libraries. Start with the public [Redis Iris documentation](https://redis.io/docs/latest/develop/ai/context-engine/)
+and obtain an Agent Memory store and/or Context Retriever surface accessible to
+your application. An ordinary Redis server alone does not implement these APIs.
+The [Kubernetes guide](docs/kubernetes-samples.md) describes an optional internal
+Redis Field Engineering deployment; it is not a prerequisite for using the packages.
 
-The native samples can use the existing self-managed Iris GKE cluster through
-loopback port forwards; see [Kubernetes sample setup](docs/kubernetes-samples.md).
-The native runners default to the Redis Cloud settings in `.env.local`;
-select the Kubernetes profile explicitly with `REDIS_IRIS_ENV_FILE`.
+## Tools and local checks
 
-The Docker Compose environment described below uses managed Redis Cloud services
-and `.env.local`. No local Kubernetes cluster is required for normal development
-or CI.
+Install the .NET 10 SDK selected by `global.json`, the .NET 8 runtime for the
+compatibility tests, and Python 3 for packaging helpers. Docker with Compose is
+needed only for the container sample and Docker-context regression.
 
-## Topology
-
-```text
-Docker Compose
-  ├── sample-agent / integration-test-runner
-  ├── Agent Memory protocol fake (offline profile)
-  ├── Context Retriever MCP fake (offline profile)
-  ├── OpenTelemetry Collector
-  ├── Prometheus
-  ├── Tempo
-  └── Grafana
-          │
-          ├── HTTPS ──► Managed Redis Agent Memory
-          └── MCP   ──► Managed Redis Context Retriever
-                            └── Synthetic Redis Cloud data
-```
-
-The local application connects to the managed services through credentials supplied at runtime. The observability stack receives connector telemetry locally; Iris services remain remote.
-
-## Compose profiles
-
-### `managed`
-
-The primary development and end-to-end profile.
-
-- Runs the application/test runner and local observability stack.
-- Connects to dedicated managed Agent Memory and Context Retriever development services.
-- Exercises real authentication, authorization, session storage, promotion, semantic recall, MCP discovery, access tags, and tool execution.
-- Requires cloud credentials and network access.
-
-### `offline`
-
-The deterministic PR and inner-loop profile.
-
-- Replaces the two managed endpoints with local protocol fakes.
-- Exercises serialization, mapping, lifecycle, timeout, retry, credential rotation, authorization failures, cross-tenant isolation, and telemetry.
-- Does not claim compatibility with real promotion, semantic search, or Context Retriever authorization.
-- Requires no Redis Cloud credentials.
-
-### `observability`
-
-Runs only the OpenTelemetry Collector, Prometheus, Tempo, and Grafana so a developer can run the application directly with `dotnet run` while retaining the same telemetry environment.
-
-## Managed service isolation
-
-The development environment must use synthetic data only.
-
-- Use dedicated non-production Agent Memory and Context Retriever services.
-- Use separate credentials for developers and CI where practical.
-- Generate a unique test-run prefix for owner, session, namespace, and seeded entity identifiers.
-- Context Retriever data must be safely reset or uniquely scoped between runs.
-- Agent Memory cleanup must delete both session memory and explicitly created long-term memories; session deletion alone does not remove promoted LTM.
-- Tests must never target customer stores or production agent keys.
-
-Example run prefix:
-
-```text
-maf-iris-{developer-or-ci}-{run-id}
-```
-
-The connector's identifier codec will convert this logical identifier to service-valid IDs where required.
-
-## Configuration
-
-Secrets are supplied through an ignored `.env.local`, CI secret store, or the developer's secret manager. The repository will provide `.env.example` containing names only.
-
-Required managed Agent Memory settings:
-
-```text
-AGENT_MEMORY_BASE_URL
-AGENT_MEMORY_STORE_ID
-AGENT_MEMORY_API_KEY
-```
-
-Required managed Context Retriever settings will include:
-
-```text
-CONTEXT_RETRIEVER_MCP_URL
-CONTEXT_RETRIEVER_AGENT_KEY
-CONTEXT_RETRIEVER_ADMIN_URL
-CONTEXT_RETRIEVER_ADMIN_KEY
-```
-
-Admin credentials are used only by explicit seed/reset tooling. The agent application receives only an agent key with the minimum access tags needed by its test profile.
-
-Local telemetry defaults:
-
-```text
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-OTEL_SERVICE_NAME=ms-agent-framework-redis-dev
-```
-
-No credential, prompt, recalled memory, tool argument/result, owner ID, or session ID is exported by default.
-
-## Developer commands
-
-The repository should expose a small command surface, implemented by scripts or a task runner:
+From the repository root:
 
 ```bash
-./scripts/dev-env.sh up managed
-./scripts/dev-env.sh up offline
-./scripts/dev-env.sh up observability
-./scripts/dev-env.sh seed
-./scripts/dev-env.sh test
-./scripts/dev-env.sh reset
-./scripts/dev-env.sh down
+dotnet restore ms-agent-framework-redis.slnx
+dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
+dotnet test ms-agent-framework-redis.slnx -c Release --no-build
+dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
+python3 eng/test-package-validation.py
+./eng/pack.sh
+./eng/package-smoke.sh
 ```
 
-Expected behavior:
+The package destination must be empty; use `./eng/pack.sh /path/to/new-directory`
+and pass that same directory to `./eng/package-smoke.sh` for repeated builds.
+Unit tests use synthetic handlers and fixtures. Unconfigured live tests report
+skips, which do not count as release evidence. There is no offline Docker profile
+or scheduled nightly live-test workflow. CI runs unit/build/package checks and
+builds the sample container; the manual release workflow requires the configured
+live gates in [TESTING.md](TESTING.md).
 
-- `up` validates required tools and configuration before starting containers.
-- `seed` creates only synthetic Context Retriever entities/surfaces and test access profiles.
-- `test` selects managed or offline tests from the active profile.
-- `reset` removes only resources carrying the current test-run prefix.
-- `down` stops local containers but never deletes managed data implicitly.
+## Configure a sample
 
-## Test allocation
+```bash
+cp .env.example .env.local
+chmod 600 .env.local
+```
 
-| Test type | Offline profile | Managed profile |
-|---|---:|---:|
-| DTO serialization and validation | Yes | No |
-| Agent Framework lifecycle and message mapping | Yes | Smoke |
-| Authentication failure mapping | Yes | Yes |
-| Credential rotation | Yes | Yes |
-| Owner and access-profile isolation | Yes | Yes |
-| Timeout, throttling, malformed response, retry | Yes | Limited |
-| Session round trip | Simulated | Yes |
-| Background promotion | No | Yes, bounded polling |
-| Semantic LTM search | Simulated | Yes |
-| Context Retriever tool discovery/execution | Simulated | Yes |
-| Context Retriever access tags | Simulated | Yes |
-| Retention and deletion | Simulated | Yes |
-| Trace/metric names and redaction | Yes | Yes |
+Fill only the settings required by the sample you run. Keep the file out of logs
+and version control. The native runner scripts source this shell-format file;
+the standalone C# snippets read environment variables directly.
 
-Managed promotion tests must poll with a bounded, generous timeout. They must not assert that an event is promoted immediately.
+| Setting | Required by |
+| --- | --- |
+| `REDIS_IRIS_ENDPOINT`, `REDIS_IRIS_STORE_ID`, `REDIS_IRIS_API_KEY` | RAM samples |
+| `OPENAI_API_KEY` | Model-backed samples (not data-plane tests or model export) |
+| `REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT`, `REDIS_IRIS_CONTEXT_RETRIEVER_AGENT_KEY` | DevUI and fixed Context Retriever sample |
+| `REDIS_IRIS_CONTEXT_RETRIEVER_CREDENTIAL_VERSION` | Non-secret CR key rotation version; change when rotating the key |
 
-## CI policy
+Use HTTPS except for loopback development. Key-only RAM samples require a store
+that permits service identities; ownership-enforcing personal stores require
+signed user delegation. The [security model](SECURITY.md) explains the distinction.
+A fixed Context Retriever key gives every caller its entire authorized scope.
+Use dedicated synthetic resources with narrow permissions and short retention.
 
-- Pull requests run unit tests and the Docker `offline` profile.
-- Nightly builds run the Docker `managed` profile against isolated synthetic data.
-- Release candidates run the managed compatibility matrix and retention/deletion cleanup verification.
-- Forked or untrusted pull requests never receive managed-service credentials.
-- Managed tests use concurrency controls or unique run scopes to prevent cross-run interference.
-- Cleanup runs after success, failure, or cancellation and reports partial cleanup without masking the original test failure.
+```bash
+./scripts/run-agent-memory-demo.sh full
+./scripts/run-agent-memory-devui.sh
+```
 
-## Initial deliverables
+The persistent demo requires RAM and a model key. DevUI additionally requires a
+compatible travel Context Retriever surface; follow its [provisioning and seeding
+instructions](samples/RedisIrisDevUI/README.md#provision-the-managed-context-retriever-surface).
+These are explicit administrative operations against your chosen surface.
+For a different saved shell profile, set `REDIS_IRIS_ENV_FILE` to its path.
+Open the native DevUI at http://localhost:5080. Stop it with Ctrl-C.
 
-1. `compose.yaml` with `managed`, `offline`, and `observability` profiles.
-2. OTel Collector, Prometheus, Tempo, and Grafana configuration.
-3. Agent Memory REST fake implementing only consumed production endpoints.
-4. Context Retriever MCP fake built with the official MCP SDK.
-5. Synthetic Context Retriever seed/reset tooling.
-6. `.env.example` and secret-handling documentation.
-7. One smoke test proving session persistence, LTM recall, MCP tool execution, trace parenting, and metric emission against managed services.
+Generate the travel model and synthetic records without any service credentials:
 
+```bash
+dotnet run --project samples/RedisIrisDevUI -- --print-context-model
+dotnet run --project samples/RedisIrisDevUI -- --print-context-seed
+```
+
+## Authentication, containers, and cleanup
+
+The [DevUI guide](samples/RedisIrisDevUI/README.md) describes local sign-in tokens,
+scoped keys, and optional Cognito authentication. It also covers Compose setup,
+which requires its synthetic user bundle for remote-container access. The
+[Cognito example](infra/aws-cognito-jwt/README.md) is optional; its Terraform state
+contains sensitive credentials and must remain private. Docker contexts exclude
+infrastructure and Terraform-sensitive files.
+
+Use `docker compose down` to stop the container demonstration. Stopping containers
+does not delete managed service data. The persistent sample's `clear` command is
+limited to its configured `SAMPLE_OWNER_ID`; session deletion does not retract
+promoted long-term memories or guarantee complete erasure. Inspect partial cleanup
+failures and asynchronous extraction as described in the
+[operational contract](docs/operational-contract.md).
