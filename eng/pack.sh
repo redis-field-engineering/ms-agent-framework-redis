@@ -12,3 +12,4 @@ for project in Redis.Iris.AgentMemory Redis.Iris.ContextRetriever.Modeling Redis
   dotnet pack "src/$project" -c Release -o "$artifact_dir"
 done
 ./eng/validate-packages.sh "$artifact_dir"
+dotnet run --project eng/PackageSymbols -c Release -- "$artifact_dir"

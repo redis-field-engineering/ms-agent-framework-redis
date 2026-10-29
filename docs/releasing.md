@@ -25,4 +25,10 @@ Create the `nuget` environment with `NUGET_API_KEY`, scoped to these four packag
 
 ## Release record
 
+The four assemblies embed portable PDBs and their source documents. Consumers can
+debug the exact packaged source without a separate symbol upload or repository
+access. SourceLink mappings still identify the originating commit. `eng/pack.sh`
+inspects the actual package assemblies and rejects missing embedded symbols,
+source documents, or SourceLink mappings.
+
 Record the tag/commit, four package versions, runtime and service versions, identity modes, live gate results, and known preview limits in the release notes. Managed scoped-key Context Retriever validation is not evidence for delegated Context Retriever authentication. Changes to Agent Framework or service compatibility require rerunning the same gates. The MIT license applies to this library; Redis service and third-party dependency terms remain separate.
