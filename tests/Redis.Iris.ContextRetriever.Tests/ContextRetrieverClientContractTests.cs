@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Text;
@@ -113,16 +114,32 @@ public sealed class ContextRetrieverClientContractTests
         await Assert.ThrowsAsync<ArgumentException>(() => factory.ConnectAsync(options, "key"));
     }
 
-    [Fact]
-    public async Task RedirectDoesNotForwardAgentKey()
+    [Theory]
+    [InlineData(302)]
+    [InlineData(307)]
+    [InlineData(308)]
+    public async Task DefaultTransportDoesNotForwardCredentialsAcrossRedirects(int status)
     {
-        var handler = new RedirectHandler();
-        var factory = new ContextRetrieverClientFactory(handlerFactory: () => handler, loggerFactory: null);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var original = new TcpListener(IPAddress.Loopback, 0);
+        using var target = new TcpListener(IPAddress.Loopback, 0);
+        original.Start();
+        target.Start();
+        var originalPort = ((IPEndPoint)original.LocalEndpoint).Port;
+        var targetPort = ((IPEndPoint)target.LocalEndpoint).Port;
+        var first = ReplyWithRedirectAsync(original, targetPort, status, timeout.Token);
+        var factory = new ContextRetrieverClientFactory();
 
-        var error = await Assert.ThrowsAsync<ContextRetrieverConnectionException>(() => factory.ConnectAsync(s_options, "redirect-secret"));
+        var error = await Assert.ThrowsAsync<ContextRetrieverConnectionException>(() => factory.ConnectAsync(
+            new() { Endpoint = new($"http://127.0.0.1:{originalPort}/mcp"), ConnectionTimeout = TimeSpan.FromSeconds(2) },
+            "redirect-agent-secret", "redirect-user-secret", timeout.Token));
 
-        Assert.Equal(1, handler.RequestCount);
-        Assert.DoesNotContain("redirect-secret", error.ToString());
+        var headers = await first;
+        Assert.Contains("X-API-Key: redirect-agent-secret", headers, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Authorization: Bearer redirect-user-secret", headers, StringComparison.OrdinalIgnoreCase);
+        Assert.False(target.Pending());
+        Assert.DoesNotContain("redirect-agent-secret", error.ToString());
+        Assert.DoesNotContain("redirect-user-secret", error.ToString());
     }
 
     [Fact]
@@ -330,16 +347,15 @@ public sealed class ContextRetrieverClientContractTests
         }
     }
 
-    private sealed class RedirectHandler : HttpMessageHandler
+    private static async Task<string> ReplyWithRedirectAsync(TcpListener listener, int targetPort, int status, CancellationToken cancellationToken)
     {
-        public int RequestCount { get; private set; }
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            RequestCount++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.TemporaryRedirect)
-            {
-                Headers = { Location = new Uri("https://attacker.example.test/mcp") },
-            });
-        }
+        using var client = await listener.AcceptTcpClientAsync(cancellationToken);
+        var stream = client.GetStream();
+        using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+        var headers = new StringBuilder();
+        while (await reader.ReadLineAsync(cancellationToken) is { Length: > 0 } line) headers.AppendLine(line);
+        var response = $"HTTP/1.1 {status} Redirect\r\nLocation: http://127.0.0.1:{targetPort}/redirected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(response), cancellationToken);
+        return headers.ToString();
     }
 }
