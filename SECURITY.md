@@ -21,8 +21,9 @@ state. A configured provider returning a missing, empty, or expired token fails
 before HTTP dispatch. Authorization errors are never retried with the JWT
 omitted. Credentials are attached to individual requests, not shared default
 headers. The DI HTTP client disables default HTTP request logging because paths
-contain session identifiers, and retains redaction of both credential headers
-for explicitly added loggers. Connector metrics and activities remain available.
+contain session identifiers. The credential-header redaction configuration remains
+available to loggers that honor it; custom loggers receive raw requests and must
+sanitize paths and credentials themselves. Connector metrics and activities remain available.
 Hosts adding HTTP logging must sanitize paths and redact `X-Iris-User-Token`
 as well as `Authorization`.
 
