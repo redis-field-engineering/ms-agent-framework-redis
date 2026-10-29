@@ -4,6 +4,8 @@ using System.Diagnostics.Metrics;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using Xunit;
 
 namespace Redis.Iris.ContextRetriever.Tests;
@@ -153,6 +155,38 @@ public sealed class ContextRetrieverClientContractTests
         Assert.DoesNotContain("trace-secret", serialized);
         Assert.DoesNotContain("private-name", serialized);
         Assert.DoesNotContain("context.example.test", serialized);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SdkPayloadLoggingRequiresExplicitOptIn(bool enableSensitiveLogging)
+    {
+        using var capture = new CapturingLoggerFactory();
+        var handler = new McpContractHandler();
+        var factory = new ContextRetrieverClientFactory(capture, () => handler, enableSensitiveLogging);
+        await using (var client = await factory.ConnectAsync(s_options, "private-key", "private-token"))
+        {
+            var result = await Assert.Single(client.Tools).InvokeAsync(new(new Dictionary<string, object?> { ["name"] = "private-query" }));
+            Assert.Contains("Found private-query", result?.ToString());
+        }
+        Assert.Contains("tools/call", handler.Methods);
+        var logs = string.Join("\n", capture.Messages);
+        Assert.Equal(enableSensitiveLogging, logs.Contains("private-query", StringComparison.Ordinal));
+        Assert.Equal(enableSensitiveLogging, logs.Contains("Found private-query", StringComparison.Ordinal));
+        Assert.DoesNotContain("private-key", logs);
+        Assert.DoesNotContain("private-token", logs);
+    }
+
+    private sealed class CapturingLoggerFactory : ILoggerFactory, ILogger
+    {
+        public ConcurrentQueue<string> Messages { get; } = new();
+        public void AddProvider(ILoggerProvider provider) { }
+        public ILogger CreateLogger(string categoryName) => this;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Messages.Enqueue(formatter(state, exception));
+        public void Dispose() { }
     }
 
     [Fact]
