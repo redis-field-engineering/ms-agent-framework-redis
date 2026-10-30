@@ -1,39 +1,22 @@
-# Local development
+# Run the samples locally
 
 Use the [standalone quickstart](docs/quickstart.md) for a small application, or the
-commands below to develop this repository. Redis service provisioning is separate
+commands below to build and run the samples. Redis service provisioning is separate
 from the .NET libraries. Start with the public [Redis Iris documentation](https://redis.io/docs/latest/develop/ai/context-engine/)
 and obtain an Agent Memory store and/or Context Retriever surface accessible to
 your application. An ordinary Redis server alone does not implement these APIs.
-The [Kubernetes guide](docs/kubernetes-samples.md) describes an optional internal
-Redis Field Engineering deployment; it is not a prerequisite for using the packages.
 
-## Tools and local checks
+## Prerequisites
 
-Install the .NET 10 SDK selected by `global.json`, the ASP.NET Core 8 runtime
-(which includes the .NET 8 runtime) or the .NET 8 SDK for the samples and
-compatibility tests, and Python 3 for packaging helpers. Docker with Compose is
-needed only for the container sample and Docker-context regression.
+Install the .NET 10 SDK selected by `global.json` and the ASP.NET Core 8 runtime
+(which includes the .NET 8 runtime) or the .NET 8 SDK for the samples. Docker
+with Compose is needed for the container sample and Context Retriever provisioning jobs.
 
-From the repository root:
+Build from the repository root:
 
 ```bash
-dotnet restore ms-agent-framework-redis.slnx
-dotnet build ms-agent-framework-redis.slnx -c Release --no-restore
-dotnet test ms-agent-framework-redis.slnx -c Release --no-build
-dotnet format ms-agent-framework-redis.slnx --verify-no-changes --no-restore
-python3 eng/test-package-validation.py
-./eng/pack.sh
-./eng/package-smoke.sh
+dotnet build ms-agent-framework-redis.slnx -c Release
 ```
-
-The package destination must be empty; use `./eng/pack.sh /path/to/new-directory`
-and pass that same directory to `./eng/package-smoke.sh` for repeated builds.
-Unit tests use synthetic handlers and fixtures. Unconfigured live tests report
-skips, which do not count as release evidence. There is no offline Docker profile
-or scheduled nightly live-test workflow. CI runs unit/build/package checks and
-builds the sample container; the manual release workflow requires the configured
-live gates in [TESTING.md](TESTING.md).
 
 ## Configure a sample
 

@@ -9,11 +9,7 @@ Redis Agent Memory provides both Agent Framework extension points:
 
 ## Configuration
 
-For the existing self-managed GKE deployment, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
-The runner defaults to Redis Cloud in `.env.local`.
-Set `REDIS_IRIS_ENV_FILE=secrets/iris-k8s.env` to select Kubernetes explicitly.
-
-For Redis Cloud, the repository root `.env.local` holds the connection values. Add the model credential and, optionally, a stable demo owner:
+Copy the repository root `.env.example` to `.env.local` and configure your Agent Memory connection, model credential, and optional stable demo owner. To use a different shell-format configuration file, set `REDIS_IRIS_ENV_FILE` to its path:
 
 ```dotenv
 REDIS_IRIS_ENDPOINT="https://..."
@@ -29,7 +25,7 @@ REDIS_IRIS_DEMO_TELEMETRY="false"
 
 Do not commit `.env.local`. Use only a dedicated development store with synthetic data.
 
-## Presentation-friendly flow
+## Run the demo
 
 Teach the preference and demonstrate same-session durability:
 
@@ -73,7 +69,7 @@ During `teach` and `full`, the demo prints three distinct memory views:
 
 The deliberately small default window of four messages makes the distinction visible: Redis retains the complete session while the model receives the server summary (when present) followed by a bounded recent slice. `IncludeSessionSummary` defaults to true, and `MaxSummaryCharacters` bounds summary text separately from the event count. The summary is labeled untrusted user context. Long-term recall remains a separate owner-scoped layer and appears in Session B after promotion.
 
-## What the demo proves
+## Library behavior demonstrated
 
 1. Supported text request and response messages are written during a normal successful invocation. Retries after ambiguous failures can duplicate events.
 2. The full durable session, optional managed summary, and bounded short-term window are separate memory views.

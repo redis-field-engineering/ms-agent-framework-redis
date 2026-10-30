@@ -1,10 +1,10 @@
 # Preview operational contract
 
-This contract defines the scope of `0.1.0-preview.1`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Applications must validate their service version and identity mode through the [live integration checks](../TESTING.md#optional-live-integration-validation).
+This contract defines the scope of `0.1.0-preview.1`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Verify that your service deployment supports the APIs and identity mode your application uses.
 
 ## Supported surface
 
-Agent Memory supports appending and reading session events, reading summaries, session/event deletion, owner-scoped session listing, filtered long-term-memory search, and bulk deletion by known memory IDs. Agent Framework integration supplies text history and untrusted recalled context. It does not expose direct LTM create/update, namespace administration, store provisioning, extraction configuration, or a complete owner-erasure operation. The live fixture's direct REST writes are test setup, not a public connector API.
+Agent Memory supports appending and reading session events, reading summaries, session/event deletion, owner-scoped session listing, filtered long-term-memory search, and bulk deletion by known memory IDs. Agent Framework integration supplies text history and untrusted recalled context. It does not expose direct LTM create/update, namespace administration, store provisioning, extraction configuration, or a complete owner-erasure operation.
 
 The default message mapper stores text-only user and assistant messages. System messages are opt-in. Tool calls/results, images, audio, and mixed-content messages on supported roles are skipped unless an explicit text projection is configured. Unsupported roles are always skipped before content projection. It cannot reconstruct a full tool or multimodal transcript. Observe skipped-message metrics before relying on durable reconstruction.
 
@@ -42,7 +42,3 @@ Session history, summaries, and LTM are separate records with service-controlled
 `DeleteSessionMemoryAsync` deletes session state, not promoted LTM. Deleting one event does not retract summaries or extracted facts. Bulk deletion removes only supplied LTM IDs, and background extraction may create records after deletion. Search pagination, ranking, backup retention, and in-flight work mean a one-pass search-and-delete is not proof of complete erasure.
 
 The connector and samples do not provide a complete privacy-erasure workflow. Such a workflow must prevent new writes, quiesce/drain background processing, enumerate all relevant records and namespaces through supported administrative APIs, inspect partial deletion errors, verify absence, and apply the service's backup/retention policy. Until that is implemented and validated by the host, do not advertise a user-facing “delete all my data” guarantee based on these helpers. Use dedicated synthetic data and short retention for demos and live tests.
-
-## Publication requirements
-
-A public preview requires the five-package closure and isolated consumer check plus non-live test suites on both supported runtimes. Managed/session-promotion, Context Retriever, and signed-user RAM isolation checks are optional integration validation, independent of publication. When running those checks, missing credentials or skipped live tests are not passing evidence. Versioned releases remain preview until broader recovery, lifecycle, service-compatibility, and API-stability requirements have their own evidence. See [TESTING.md](../TESTING.md) for the current validation record.

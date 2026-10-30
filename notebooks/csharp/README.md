@@ -2,15 +2,10 @@
 
 These Jupyter notebooks demonstrate Redis Iris Agent Memory, Context Retriever, POCO modeling, and their integration with Microsoft Agent Framework.
 
-For the existing self-managed deployment, complete [Kubernetes sample setup](../../docs/kubernetes-samples.md)
-and keep the port forwards running. Runtime notebooks default to Redis Cloud in
-`.env.local`. Set `REDIS_IRIS_ENV_FILE` to the absolute path of
-`secrets/iris-k8s-settings.json` before starting the kernel to select Kubernetes.
-
 ## Prerequisites
 
 1. Install a Jupyter client with a C# kernel, such as the VS Code Polyglot Notebooks extension or the .NET Interactive Jupyter kernel.
-2. For the memory notebooks (01, 02, and 05), configure Kubernetes as above, or ensure the repository root `.env.local` contains:
+2. For the memory notebooks (01, 02, and 05), ensure the repository root `.env.local` contains:
 
    ```dotenv
    REDIS_IRIS_ENDPOINT="https://..."
@@ -50,7 +45,7 @@ docker compose --profile context-retriever run --rm --build context-seeder
 
 The jobs create a model JSON, seed JSON, and private traveler credential bundle under the ignored `artifacts/context-retriever` directory. Keep the credential bundle between runs; full agent keys are only returned at creation. The runtime notebooks select a scoped traveler from that bundle through [context-notebook.csx](context-notebook.csx). They do not provision or import data.
 
-Notebooks 03–05 honor `REDIS_IRIS_ENV_FILE` (dotenv or JSON) and let environment variables override file values. `REDIS_IRIS_CONTEXT_RETRIEVER_USERS_FILE` selects a different scoped credential bundle, with relative paths resolved from the repository root. The model artifact remains `artifacts/context-retriever/redis-iris-travel-context-model.json`. The Docker setup jobs always read `.env.local`; for an existing Kubernetes fixture, use its documented setup rather than rerunning the managed provisioner.
+Notebooks 03–05 honor `REDIS_IRIS_ENV_FILE` (dotenv or JSON) and let environment variables override file values. `REDIS_IRIS_CONTEXT_RETRIEVER_USERS_FILE` selects a different scoped credential bundle, with relative paths resolved from the repository root. The model artifact remains `artifacts/context-retriever/redis-iris-travel-context-model.json`. The Docker setup jobs always read `.env.local`. If your travel surface is already provisioned and seeded, configure its runtime endpoint and scoped credential bundle and skip those jobs.
 
 Direct reads in 03 and all of 04 need no OpenAI key. The agent section of 03 needs `OPENAI_API_KEY`; 05 also needs a synthetic-owner RAM store as used by 01–02. Bundled Context Retriever delegated tokens are supported when present and unexpired; this does not automatically configure RAM delegated authentication.
 
@@ -75,11 +70,3 @@ Notebooks 06–08 run offline by default, using the real SDK and providers with 
 In 06, set `runLiveContextChecks = true` to read the travel fixture from notebook 00. To require delegated authorization, also set `requireDelegatedContext = true` and supply two fresh signed Context Retriever tokens through the configured users bundle. Ordinary scoped-key results do not establish delegated authorization. Configure issuer trust and access-tag claim mappings through your deployment's authentication setup before enabling delegated mode.
 
 The independent `runLiveRamChecks = true` switch requires an ownership-enforcing RAM deployment and `REDIS_IRIS_RAM_DELEGATED_USERS_FILE`. Its private JSON array has two objects with `subject`, `accessToken`, `expiresAt`, and `sessionId`; each session must already contain synthetic events belonging to that signed subject. Relative file paths resolve from the repository root. Keep tokens under ignored `secrets/`, never in cells. Both own reads must succeed before cross-user 403/404 checks. This section validates session reads, not LTM isolation or complete service authorization. Disabled live checks print `NOT RUN`.
-
-To validate the new labs, install `nbformat`, `nbclient`, and `jupyter_client` in your notebook Python environment, register a `.net-csharp` kernel, build Release, and run:
-
-```bash
-python3 eng/validate-notebooks.py
-```
-
-The validator checks notebook schemas, executes the offline 06–08 assertions in fresh kernels, and compiles optional live cells inside uninvoked functions. It never runs those service calls or saves executed outputs to the notebooks. Use `--kernel NAME` for a different registered C# kernel name.

@@ -2,7 +2,9 @@
 
 Use .NET 10 and an existing Redis Agent Memory store or Context Retriever surface. This library is maintained by Redis Field Engineering; the `Redis.Iris.AgentFramework` package name denotes Agent Framework integration, not Microsoft ownership or support. These are preview APIs. See [the operational contract](operational-contract.md) before using customer data.
 
-Service provisioning is separate from these packages. Use the public [Redis Iris documentation](https://redis.io/docs/latest/develop/ai/context-engine/) for deployment options and the [RAM REST quickstart](https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/rest-api-quickstart/) for creating a development memory service. The internal Kubernetes example is optional; no access to Redis Field Engineering infrastructure is required.
+Service provisioning is separate from these packages. Use the public [Redis Iris documentation](https://redis.io/docs/latest/develop/ai/context-engine/) for deployment options and the [RAM REST quickstart](https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/rest-api-quickstart/) for creating a development memory service.
+
+For an overview of session memory, long-term recall, and how the providers participate in an agent run, read the [Agent Memory connector](../README.md#redis-agent-memory-connector) and [Agent Framework integration](../README.md#microsoft-agent-framework-integration) explainers.
 
 ## Install
 

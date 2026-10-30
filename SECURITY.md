@@ -37,8 +37,7 @@ The DevUI opts in with `REDIS_IRIS_RAM_DELEGATED_AUTH=true` and requires OIDC.
 It reuses the validated server-side access-token ticket, uses Cognito `sub` as
 the RAM owner, and includes that subject in its session isolation key. Token
 expiry requires sign-in again. Old composite-owner data is not migrated or
-retrieved through a less restricted fallback. The demo's static RAM tenant
-mapping to account `1` applies only to its single-account deployment.
+retrieved through a less restricted fallback.
 
 ## Session authorization
 

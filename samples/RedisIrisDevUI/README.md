@@ -6,11 +6,6 @@ The hosted agent uses Agent Framework's in-memory session store so each DevUI co
 
 ## Run
 
-For authorized Redis Field Engineering developers using the internal Iris GKE cluster, follow [Kubernetes sample setup](../../docs/kubernetes-samples.md).
-The native runner defaults to Redis Cloud in `.env.local`; set
-`REDIS_IRIS_ENV_FILE=secrets/iris-k8s.env` to select Kubernetes. That profile runs on the host
-through loopback port forwards and provisions its own travel surface and user keys.
-
 Start with the repository root `.env.example` and fill the RAM endpoint/store/key, model key, and Context Retriever endpoint/key in `.env.local`. Provision the travel surface and seed its synthetic records as described below before running DevUI. Then run:
 
 ```bash
@@ -22,7 +17,6 @@ DEVUI_USERS_FILE="$PWD/artifacts/context-retriever/redis-iris-travel-users.json"
 The native runner needs this explicit bundle path to select the seeded travelers
 and enable multi-user authentication. Open [login](http://localhost:5080/login)
 and use a local sign-in token from the generated bundle; keep that file private.
-The internal Kubernetes profiles already configure their own bundle paths.
 
 Open [http://localhost:5080](http://localhost:5080) for the sample dashboard or [http://localhost:5080/devui](http://localhost:5080/devui) for the Agent Framework DevUI.
 
@@ -121,15 +115,6 @@ Sign out before testing the second traveler. The provisioned keys are distinct a
 
 ## Optional Cognito delegated-JWT mode
 
-For Context Retriever running in GKE, use the [Kubernetes Cognito profile](../../docs/kubernetes-samples.md#reuse-cognito-for-the-gke-context-retriever).
-It reuses the same pool and DevUI OIDC flow, configures the GKE travel surface,
-and keeps RAM on its existing Kubernetes service key by default. Once RAM has
-compatible delegation and ownership configuration, opt in with
-`REDIS_IRIS_RAM_DELEGATED_AUTH=true` (or the setup script's `--ram-delegated-auth`
-option). The same signed access token is forwarded to RAM with its agent key;
-new personal memories use Cognito `sub` as owner. See the
-[RAM setup details](../../docs/kubernetes-samples.md#optional-ram-delegated-jwt-mode).
-
 The development sign-in-token flow above remains the default. To exercise real delegated JWT authorization instead, deploy [`infra/aws-cognito-jwt`](../../infra/aws-cognito-jwt/README.md), configure the Context Retriever surface to trust the emitted issuer/JWKS/audience, and add the following non-secret Terraform outputs to `.env.local`:
 
 ```bash
@@ -164,7 +149,13 @@ The overlay reads non-secret OIDC values from Terraform state and the tenant age
 
 The generated JWT demo overlay enables the development-only `/debug/jwt` route. It requires the authenticated session cookie and returns the exact delegated bearer token together with its decoded header and claims. Responses are marked `no-store`. Disable `DEVUI_ENABLE_ACCESS_TOKEN_INSPECTOR` after inspection, and never enable this route in a production application.
 
-For live-test token files, open `/debug/jwt/fresh` in each user's browser. This starts a new authorization-code flow and then downloads `delegated-jwt.json` from the updated authenticated session. Rename each download for its user; do not save an old inspector tab, which can still display an expired token. Keep these files private and delete them after testing. OIDC sign-in now lands on the sample dashboard (`/`), with **Sign out** at the top and a link to the chat UI.
+To download a fresh token for local diagnostics, open `/debug/jwt/fresh` in each user's browser. This starts a new authorization-code flow and then downloads `delegated-jwt.json` from the updated authenticated session. Rename each download for its user; do not save an old inspector tab, which can still display an expired token. Keep these files private and delete them after testing. OIDC sign-in lands on the sample dashboard (`/`), with **Sign out** at the top and a link to the chat UI.
+
+To enable delegated RAM authentication as well, set
+`REDIS_IRIS_RAM_DELEGATED_AUTH=true`. The RAM deployment must trust the token's
+issuer and audience and enable ownership enforcement. The sample forwards the
+validated access token alongside the RAM agent key and uses Cognito `sub` as the
+owner of new personal memories. See the [security model](../../SECURITY.md#delegated-ram-user-authentication).
 
 OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
 
@@ -227,4 +218,4 @@ This is deliberately a local-development sample. It refuses to start outside the
 
 The local OIDC flow uses an authorization-code GET callback. In Development, nonce and correlation cookies use `SameSite=Lax` without `Secure` only for HTTP loopback hosts, because older Safari versions reject Secure cookies on HTTP localhost. HTTPS and non-loopback requests retain the framework's Secure cookie defaults. Correlation, nonce validation, and PKCE remain enabled.
 
-Start each sign-in from `http://localhost:5080/login` in the browser that will complete it. Do not copy a Cognito login URL between browsers or reuse a completed callback. A missing or expired login cookie now leads to a safe retry page. Restarting this sample clears the server-side ticket store and requires a fresh sign-in.
+Start each sign-in from `http://localhost:5080/login` in the browser that will complete it. Do not copy a Cognito login URL between browsers or reuse a completed callback. A missing or expired login cookie leads to a safe retry page. Restarting this sample clears the server-side ticket store and requires a fresh sign-in.

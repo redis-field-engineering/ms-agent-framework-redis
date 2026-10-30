@@ -2,7 +2,7 @@
 
 This Terraform example provisions the identity-provider side of Context Retriever delegated-user authorization. Cognito owns JWT signing and its public JWKS endpoint. A pre-token-generation Lambda copies trusted user-pool attributes into **access tokens** as `tenant_id` and `traveler_id`.
 
-Surface IdP/JWKS configuration is currently a preview capability that is not exposed in the Redis Cloud UI or documented as a stable public admin API. By default Terraform only emits the required configuration. After the Context Retriever team confirms that it is enabled for the target service, set `configure_context_retriever_idp = true`, provide the surface ID, and authenticate `ctxctl` before applying. The optional `terraform_data` resource then configures the surface with the Cognito issuer.
+Surface IdP/JWKS configuration is currently a preview capability that is not exposed in the Redis Cloud UI or documented as a stable public admin API. By default Terraform only emits the required configuration. If your deployment supports surface IdP configuration, set `configure_context_retriever_idp = true`, provide the surface ID, and authenticate `ctxctl` before applying. The optional `terraform_data` resource then configures the surface with the Cognito issuer.
 
 The example is tested against `redis-context-retriever==0.0.6`. Install that version of `ctxctl` on the machine running Terraform (for example, `pipx install redis-context-retriever==0.0.6`) and authenticate it against the Context Retriever control plane before enabling the optional resource. After configuration, Terraform runs `ctxctl surface idp test` to verify JWKS connectivity.
 
@@ -50,7 +50,7 @@ Copy those values into the repository's ignored `.env.local` file and set
 
 The sample deliberately binds its cookie lifetime to Cognito's token lifetime instead of implementing background refresh. Sign in again after the configured 15-minute access-token lifetime. This keeps the test path small while proving issuance, validation, delegated Context Retriever authorization, and traveler isolation.
 
-The live test must prove that the delegated traveler token can only narrow the tenant agent key. Do not enable this path if the target deployment allows JWT-derived tags to replace or widen agent-key constraints.
+Delegated traveler tokens must only narrow the tenant agent key's permissions. Do not enable this path if the target deployment allows JWT-derived tags to replace or widen agent-key constraints.
 
 ## What Terraform creates
 
