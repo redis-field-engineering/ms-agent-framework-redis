@@ -192,7 +192,7 @@ airport?” succeeded with RAM delegation enabled against the isolated deploymen
 The application log showed two initialized RAM sessions, no failure entries,
 and no RAM HTTP errors. This was DevUI evidence only. Subsequent managed promotion
 and two-user signed isolation results are recorded in [TESTING.md](../TESTING.md);
-release validation must rerun the required gates for the selected tag.
+these live integration checks run separately from publication.
 
 The persistent memory demo uses the same explicitly selected profile:
 

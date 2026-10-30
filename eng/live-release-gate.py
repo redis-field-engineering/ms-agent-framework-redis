@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run required live suites; absent credentials, skips, and empty test runs fail release."""
+"""Run optional live validation; absent credentials, skips, and empty runs fail the check."""
 import os
 from pathlib import Path
 import subprocess
@@ -23,7 +23,7 @@ missing = [name for name in required if not os.environ.get(name)]
 if missing:
     sys.exit("Missing required live settings: " + ", ".join(missing))
 if suite == "managed" and os.environ["REDIS_IRIS_RUN_PROMOTION_TESTS"] != "1":
-    sys.exit("The managed release gate requires REDIS_IRIS_RUN_PROMOTION_TESTS=1")
+    sys.exit("The managed live check requires REDIS_IRIS_RUN_PROMOTION_TESTS=1")
 root = Path(__file__).resolve().parent.parent
 with tempfile.TemporaryDirectory() as directory:
     result = subprocess.run(["dotnet", "test", str(root / "tests" / project), "-c", "Release", "-f", "net10.0",
@@ -33,5 +33,5 @@ with tempfile.TemporaryDirectory() as directory:
         sys.exit(result.returncode)
     results = ET.parse(Path(directory) / "live.trx").findall(".//{*}UnitTestResult")
     if len(results) != expected or any(item.attrib["outcome"] != "Passed" for item in results):
-        sys.exit(f"Release requires exactly {expected} passing {suite} tests; skips/empty runs are not evidence.")
-print(f"{suite} live release gate passed")
+        sys.exit(f"Live validation requires exactly {expected} passing {suite} tests; skips/empty runs are not evidence.")
+print(f"{suite} live validation passed")

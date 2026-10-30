@@ -1,6 +1,6 @@
 # Preview operational contract
 
-This contract defines the scope of `0.1.0-preview.1`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Applications must validate their service version and identity mode through the [live release gates](../TESTING.md).
+This contract defines the scope of `0.1.0-preview.1`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Applications must validate their service version and identity mode through the [live integration checks](../TESTING.md#optional-live-integration-validation).
 
 ## Supported surface
 
@@ -45,4 +45,4 @@ The connector and samples do not provide a complete privacy-erasure workflow. Su
 
 ## Publication requirements
 
-A public preview requires the five-package closure and isolated consumer check, both supported runtime test suites, positive managed/session-promotion and Context Retriever live checks, and the signed-user RAM isolation gate. Missing credentials or skipped live tests are not passing evidence. Versioned releases remain preview until broader recovery, lifecycle, service-compatibility, and API-stability requirements have their own evidence. See [TESTING.md](../TESTING.md) for the current validation record.
+A public preview requires the five-package closure and isolated consumer check plus non-live test suites on both supported runtimes. Managed/session-promotion, Context Retriever, and signed-user RAM isolation checks are optional integration validation, independent of publication. When running those checks, missing credentials or skipped live tests are not passing evidence. Versioned releases remain preview until broader recovery, lifecycle, service-compatibility, and API-stability requirements have their own evidence. See [TESTING.md](../TESTING.md) for the current validation record.
