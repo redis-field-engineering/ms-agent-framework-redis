@@ -72,6 +72,9 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     environment: nuget
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Require public package documentation
         env:
@@ -92,9 +95,14 @@ jobs:
         with:
           name: validated-preview-packages
           path: packages
+      - name: Authenticate to NuGet with trusted publishing
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
       - name: Publish the validated dependency set
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
           RELEASE_COMMIT: ${{ needs.validate.outputs.commit }}
         run: |
           python3 eng/release-packages.py publish packages --commit "$RELEASE_COMMIT"
