@@ -3,7 +3,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 using Microsoft.Extensions.AI;
 using Redis.Iris.ContextRetriever.Modeling;
 

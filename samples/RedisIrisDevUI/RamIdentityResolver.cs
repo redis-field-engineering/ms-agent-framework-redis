@@ -2,7 +2,7 @@
 
 using System.Runtime.CompilerServices;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 
 namespace RedisIrisDevUI;
 

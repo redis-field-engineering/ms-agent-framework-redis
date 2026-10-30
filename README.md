@@ -2,6 +2,8 @@
 
 Redis Field Engineering’s preview .NET connectors provide durable Agent Framework history, owner-scoped memory recall, and authorized Redis Context Retriever tools. The packages are maintained by Redis Field Engineering; they are not Microsoft products.
 
+Use `Redis.Iris.AgentFramework` for the Microsoft Agent Framework integration. It brings in the `Redis.Iris.AgentMemory`, `Redis.Iris.ContextRetriever`, and `Redis.Iris.ContextRetriever.Modeling` packages; surface administration is available separately through `Redis.Iris.ContextRetriever.Management`.
+
 Start with the [standalone .NET quickstart](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/quickstart.md). Public publication is gated on package validation and positive live-service evidence; a green unit-test build alone does not establish release readiness.
 
 ## Project documents

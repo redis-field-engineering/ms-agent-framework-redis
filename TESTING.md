@@ -3,7 +3,7 @@
 Run each suite independently:
 
 ```bash
-dotnet test tests/Microsoft.Agents.AI.Redis.Iris.Tests
+dotnet test tests/Redis.Iris.AgentFramework.Tests
 dotnet test tests/Redis.Iris.AgentMemory.Tests
 dotnet test tests/Redis.Iris.AgentMemory.LiveTests
 dotnet test tests/Redis.Iris.ContextRetriever.LiveTests

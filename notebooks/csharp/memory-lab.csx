@@ -13,7 +13,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 using Microsoft.Extensions.AI;
 using Redis.Iris.AgentMemory;
 

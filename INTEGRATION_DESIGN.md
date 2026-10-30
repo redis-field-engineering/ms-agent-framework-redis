@@ -80,7 +80,7 @@ Redis Iris managed service
 Preferred long-term ownership:
 
 - `Redis.Iris.AgentMemory` — Redis-owned, framework-neutral .NET client and data contracts.
-- `Microsoft.Agents.AI.Redis.Iris` — Agent Framework providers, options, DI helpers, and message mapping.
+- `Redis.Iris.AgentFramework` — Agent Framework providers, options, DI helpers, and message mapping.
 
 If coordinating two repositories would delay an MVP, place an `internal` REST client in the integration package first, keep its interface framework-neutral, and extract it without changing the provider API later.
 

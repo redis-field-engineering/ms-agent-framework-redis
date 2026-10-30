@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Microsoft.Agents.AI.Redis.Iris/Microsoft.Agents.AI.Redis.Iris.csproj" />
+    <ProjectReference Include="../../src/Redis.Iris.AgentFramework/Redis.Iris.AgentFramework.csproj" />
     <ProjectReference Include="../../src/Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
   </ItemGroup>
 </Project>

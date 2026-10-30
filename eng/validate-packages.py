@@ -10,7 +10,7 @@ EXPECTED = {
     "Redis.Iris.ContextRetriever.Modeling",
     "Redis.Iris.ContextRetriever.Management",
     "Redis.Iris.ContextRetriever",
-    "Microsoft.Agents.AI.Redis.Iris",
+    "Redis.Iris.AgentFramework",
 }
 
 

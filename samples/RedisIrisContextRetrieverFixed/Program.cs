@@ -1,4 +1,4 @@
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 using Redis.Iris.ContextRetriever;
 
 var endpoint = Environment.GetEnvironmentVariable("REDIS_IRIS_CONTEXT_RETRIEVER_MCP_ENDPOINT")

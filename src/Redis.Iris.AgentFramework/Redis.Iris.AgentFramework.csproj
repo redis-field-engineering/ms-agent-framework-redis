@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Redis Iris providers for Microsoft Agent Framework.</Description>
+    <PackageId>Redis.Iris.AgentFramework</PackageId>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <ProjectReference Include="../Redis.Iris.AgentMemory/Redis.Iris.AgentMemory.csproj" />
+    <ProjectReference Include="../Redis.Iris.ContextRetriever/Redis.Iris.ContextRetriever.csproj" />
+  </ItemGroup>
+</Project>

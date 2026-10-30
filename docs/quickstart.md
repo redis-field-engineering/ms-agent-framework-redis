@@ -1,6 +1,6 @@
 # Standalone .NET quickstart
 
-Use .NET 10 and an existing Redis Agent Memory store or Context Retriever surface. This library is maintained by Redis Field Engineering; the `Microsoft.Agents.AI.Redis.Iris` package name denotes Agent Framework integration, not Microsoft ownership or support. These are preview APIs. See [the operational contract](operational-contract.md) before using customer data.
+Use .NET 10 and an existing Redis Agent Memory store or Context Retriever surface. This library is maintained by Redis Field Engineering; the `Redis.Iris.AgentFramework` package name denotes Agent Framework integration, not Microsoft ownership or support. These are preview APIs. See [the operational contract](operational-contract.md) before using customer data.
 
 Service provisioning is separate from these packages. Use the public [Redis Iris documentation](https://redis.io/docs/latest/develop/ai/context-engine/) for deployment options and the [RAM REST quickstart](https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/rest-api-quickstart/) for creating a development memory service. The internal Kubernetes example is optional; no access to Redis Field Engineering infrastructure is required.
 
@@ -11,10 +11,12 @@ After the preview is published:
 ```bash
 dotnet new console -n IrisDemo -f net10.0
 cd IrisDemo
-dotnet add package Microsoft.Agents.AI.Redis.Iris --version 0.1.0-preview.1
+dotnet add package Redis.Iris.AgentFramework --version 0.1.0-preview.1
 ```
 
 Until publication, build the five packages with `./eng/pack.sh` from a source checkout and add the resulting `artifacts/packages` directory as a NuGet source. Keep NuGet.org enabled for external dependencies. The adapter brings in the Agent Memory, Context Retriever, and modeling packages transitively. Surface administration requires explicitly adding the optional `Redis.Iris.ContextRetriever.Management` package. Applications using only the Agent Memory REST client can install `Redis.Iris.AgentMemory` instead.
+
+If you used the earlier source preview named `Microsoft.Agents.AI.Redis.Iris`, change the package/project reference and `using` directives to `Redis.Iris.AgentFramework`. The assembly is now `Redis.Iris.AgentFramework.dll`; rebuild your application and restart notebook kernels before loading it. Provider class names and behavior are unchanged. No compatibility assembly is supplied for the old name.
 
 Supply these environment settings through your shell or secret manager; the snippets do not read a repository `.env` file:
 
@@ -75,7 +77,7 @@ An application with an existing `IChatClient` can use this factory. `resolveIden
 
 ```csharp
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Redis.Iris.AgentMemory;
@@ -117,7 +119,7 @@ Dispose the returned service provider when the owning agent/application scope en
 This complete `Program.cs` uses a fixed service identity. Every caller of an agent receiving these tools receives that identity's full server-authorized scope. Use a narrowly scoped key and keep the lease alive while its tools are attached.
 
 ```csharp
-using Microsoft.Agents.AI.Redis.Iris;
+using Redis.Iris.AgentFramework;
 using Redis.Iris.ContextRetriever;
 
 static string Required(string name) => Environment.GetEnvironmentVariable(name)

@@ -50,7 +50,7 @@ header in any HTTP header-redaction configuration used by the integration.
 2. Agent Framework composition
 
 Expose optional DelegatedTokenProvider on RedisIrisAgentMemoryOptions in
-src/Microsoft.Agents.AI.Redis.Iris/RedisIrisServiceCollectionExtensions.cs and
+src/Redis.Iris.AgentFramework/RedisIrisServiceCollectionExtensions.cs and
 pass it to the low-level client. Maintain existing registrations and host policy.
 
 Preserve server-owner filters and history owner checks. Do not replace those
