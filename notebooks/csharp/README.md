@@ -26,7 +26,7 @@ and keep the port forwards running. Runtime notebooks default to Redis Cloud in
    dotnet build ms-agent-framework-redis.slnx --configuration Release
    ```
 
-4. For notebooks 01–05, start with a fresh `.NET (C#)` kernel whose working directory is `notebooks/csharp`. Assembly references and `#load` paths are relative to that directory. Notebook 00 has separate executable PowerShell and Bash versions. Run cells in order and dispose connections at the end, including after a failed live call. Clear outputs before committing or sharing executed notebooks.
+4. For notebooks 01–08, start with a fresh `.NET (C#)` kernel whose working directory is `notebooks/csharp`. Assembly references and `#load` paths are relative to that directory. Notebook 00 has separate executable PowerShell and Bash versions. Run cells in order and dispose connections at the end, including after a failed live call. Clear outputs before committing or sharing executed notebooks.
 
 ## Context Retriever setup
 
@@ -62,5 +62,24 @@ Direct reads in 03 and all of 04 need no OpenAI key. The agent section of 03 nee
 - [03 — Context Retriever fundamentals](03-context-retriever-fundamentals.ipynb) — discovers tools and schemas, verifies the seed, queries flights, and attaches the per-invocation provider to an agent.
 - [04 — POCO modeling](04-context-retriever-poco-modeling.ipynb) — compiles attributes and fluent configuration, inspects relationships and ACL mappings, compares model changes offline, and performs a typed live read. Its reduced read projection is never deployed over the full fixture.
 - [05 — Memory and live travel context](05-memory-and-live-travel-context.ipynb) — teaches a preference in Session A and combines cross-session recall with current booking records in Session B.
+- [06 — Two users, isolated context](06-two-users-isolated-context.ipynb) — demonstrates trusted identity resolution, owner-scoped recall, session binding, and authorization revocation offline; provides optional live checks for Context Retriever scoped/delegated access and RAM signed-user session isolation.
+- [07 — Tune what the agent remembers](07-tune-agent-memory.ipynb) — compares history windows, summaries, structured recall filters, similarity thresholds, result limits, and character budgets against two fixed questions, displaying the exact provider context.
+- [08 — Diagnose failures and observe behavior](08-diagnose-and-observe.ipynb) — uses controlled HTTP failures to inspect missing-session semantics, fail-open/fail-closed recall and history, cancellation, activities, and metrics.
 
-The memory notebooks generate a unique synthetic owner on every kernel run. Cleanup is deliberately scoped to that owner and is not a complete-erasure guarantee. Redis Agent Memory promotion is asynchronous, so long-term recall may initially be empty; the notebooks make that state visible without waiting indefinitely. The shared Context Retriever surface is retained across notebooks.
+The live memory notebooks (01, 02, and 05) generate a unique synthetic owner on every kernel run. Cleanup is deliberately scoped to that owner and is not a complete-erasure guarantee. Redis Agent Memory promotion is asynchronous, so long-term recall may initially be empty; the notebooks make that state visible without waiting indefinitely. The shared Context Retriever surface is retained across notebooks.
+
+## Offline labs and optional live isolation checks
+
+Notebooks 06–08 run offline by default, using the real SDK and providers with [memory-lab.csx](memory-lab.csx), a notebook-only HTTP fixture. They need a Release build and the C# kernel but no service credentials or OpenAI key. The fixture's users, session summary, memories, and similarity scores are fixed teaching inputs. It is not a service emulator or a recall-quality benchmark, and it is not shipped in any NuGet package. These labs write no remote data. Their clients and telemetry listeners are disposed inside their experiments; notebook 06 also provides an offline cleanup cell.
+
+In 06, set `runLiveContextChecks = true` to read the travel fixture from notebook 00. To require delegated authorization, also set `requireDelegatedContext = true` and supply two fresh signed Context Retriever tokens through the configured users bundle. Ordinary scoped-key results do not establish delegated authorization. Configure issuer trust and access-tag claim mappings through your deployment's authentication setup before enabling delegated mode.
+
+The independent `runLiveRamChecks = true` switch requires an ownership-enforcing RAM deployment and `REDIS_IRIS_RAM_DELEGATED_USERS_FILE`. Its private JSON array has two objects with `subject`, `accessToken`, `expiresAt`, and `sessionId`; each session must already contain synthetic events belonging to that signed subject. Relative file paths resolve from the repository root. Keep tokens under ignored `secrets/`, never in cells. Both own reads must succeed before cross-user 403/404 checks. This section validates session reads, not LTM isolation or complete service authorization. Disabled live checks print `NOT RUN`.
+
+To validate the new labs, install `nbformat`, `nbclient`, and `jupyter_client` in your notebook Python environment, register a `.net-csharp` kernel, build Release, and run:
+
+```bash
+python3 eng/validate-notebooks.py
+```
+
+The validator checks notebook schemas, executes the offline 06–08 assertions in fresh kernels, and compiles optional live cells inside uninvoked functions. It never runs those service calls or saves executed outputs to the notebooks. Use `--kernel NAME` for a different registered C# kernel name.
