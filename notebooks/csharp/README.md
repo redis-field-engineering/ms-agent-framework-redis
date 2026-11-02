@@ -23,6 +23,13 @@ These Jupyter notebooks demonstrate Redis Iris Agent Memory, Context Retriever, 
 
 4. For notebooks 01–08, start with a fresh `.NET (C#)` kernel whose working directory is `notebooks/csharp`. Assembly references and `#load` paths are relative to that directory. Notebook 00 has separate executable PowerShell and Bash versions. Run cells in order and dispose connections at the end, including after a failed live call. Clear outputs before committing or sharing executed notebooks.
 
+Before committing, clear all outputs and execution counts. CI checks every tracked
+`.ipynb` without running notebook cells. Run the same check from the repository root:
+
+```bash
+python3 eng/check-notebook-outputs.py
+```
+
 ## Context Retriever setup
 
 Start with [00 — Shared Context Retriever setup](00-context-retriever-setup.ipynb). It reuses the existing Docker Compose provisioner and seeder, requires no model or RAM credentials, and creates the complete travel fixture from the DevUI's POCOs. Use a dedicated demo Redis database: a different surface name alone does not isolate the stable seed keys. Provisioning updates the named surface's model; seeding overwrites its synthetic records.

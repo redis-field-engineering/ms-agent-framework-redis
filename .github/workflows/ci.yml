@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Reject saved notebook output
+        run: python3 eng/check-notebook-outputs.py
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
