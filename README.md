@@ -4,7 +4,9 @@ Redis Field Engineering’s preview .NET connectors provide durable Agent Framew
 
 Use `Redis.Iris.AgentFramework` for the Microsoft Agent Framework integration. It brings in the `Redis.Iris.AgentMemory`, `Redis.Iris.ContextRetriever`, and `Redis.Iris.ContextRetriever.Modeling` packages; surface administration is available separately through `Redis.Iris.ContextRetriever.Management`.
 
-Start with the [standalone .NET quickstart](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/docs/quickstart.md).
+Start with the [documentation site](https://redis-field-engineering.github.io/ms-agent-framework-redis/) or read the [standalone .NET quickstart source](docs/modules/ROOT/pages/quickstart.adoc).
+
+To build or contribute to the Antora site, see the [documentation contributor guide](docs/README.md).
 
 ## Redis Agent Memory connector
 

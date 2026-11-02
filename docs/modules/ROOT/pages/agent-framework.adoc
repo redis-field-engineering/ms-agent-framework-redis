@@ -1,0 +1,26 @@
+= Agent Framework providers
+
+`Redis.Iris.AgentFramework` connects the Agent Memory client to Agent Framework's history and context extension points. Your application supplies the model through an `IChatClient`; the providers supply remembered context and persist supported conversation messages.
+
+[cols="1,1",options="header"]
+|===
+| Provider | Role in an agent
+| `RedisIrisChatHistoryProvider` | Loads chronological session history and an optional summary before a run, then saves new supported messages afterward
+| `RedisIrisMemoryProvider` | Searches long-term memory using the latest external user message and a mandatory owner filter, then adds relevant results as explicitly untrusted context
+| `RedisContextRetrieverProvider` | Adds authorized MCP tools for retrieving current business records from a separate Context Retriever surface
+|===
+
+A typical memory-enabled turn works as follows:
+
+. The host resolves and authorizes the current user and session from trusted application state.
+. The history provider loads that session's conversation. The memory provider searches for relevant memories belonging to the same owner.
+. Agent Framework invokes the model with the current request, history, recalled context, and any configured tools.
+. The designated writer appends new supported request and response messages to Agent Memory. The service can extract long-term memories in the background.
+
+Register the memory integration with `AddRedisIrisAgentMemory`, supplying an `IdentityResolver` and `AuthorizationPolicy`, then attach the providers to the agent as shown in the xref:quickstart.adoc#attach-agent-framework-providers[quickstart]. Registration coordinates a single event writer when both memory providers are used. Set `UseChatHistoryProvider = false` to use recall and event capture alongside another history implementation.
+
+To resume a conversation after a restart, preserve the Agent Framework session state and its authorized RAM identity bindings. A new session for the same owner can recall long-term memories while maintaining its own conversation history. The application remains responsible for session storage and authentication; stored provider state never grants access by itself.
+
+History windows, summary length, recall filters, similarity thresholds, and recalled-text budgets are configurable. History loads and writes fail closed by default; recall defaults to continuing without memories on an operation failure. The default mapper persists user and assistant text, so it does not reconstruct a full tool-call or multimodal transcript. See the https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/samples/RedisIrisPersistentAgent/README.md[persistent sample] for a complete application.
+
+Context Retriever is optional for memory-only applications. It complements remembered preferences with current records, such as a traveler's flight reservation. See the xref:context-retriever.adoc[Context Retriever guide] for per-user tool authorization and credential rotation.

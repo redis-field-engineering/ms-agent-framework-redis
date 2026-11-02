@@ -1,0 +1,19 @@
+<header class="header">
+  <nav class="navbar" aria-label="Main navigation">
+    <div class="navbar-brand">
+      <a class="navbar-item brand" href="{{{relativize site.homeUrl}}}"><span class="brand-mark" aria-hidden="true">R</span><span>Redis Iris <span class="brand-suffix">/ .NET</span></span></a>
+      <button class="navbar-burger" data-target="topbar-nav" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+    <div id="topbar-nav" class="navbar-menu">
+      <div class="navbar-end">
+        {{#if env.SITE_SEARCH_PROVIDER}}
+        <div class="navbar-item search hide-for-print">
+          <div id="search-field" class="field"><input id="search-input" type="text" aria-label="Search documentation" placeholder="Search the docs" disabled></div>
+        </div>
+        {{/if}}
+        <a class="navbar-item" href="https://redis.io/docs/latest/develop/ai/context-engine/">Redis docs</a>
+        <a class="navbar-item" href="https://github.com/redis-field-engineering/ms-agent-framework-redis">GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </nav>
+</header>

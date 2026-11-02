@@ -1,0 +1,56 @@
+= Security model
+
+The application host authorizes access to memory and business records on every invocation.
+Prompts, tool arguments, and model output must never select credentials, tenants, owners, sessions, or access profiles.
+The repository's {source-url}/SECURITY.md[security model] is the authoritative statement of the connector's security boundaries.
+
+== Identity and sessions
+
+`IdentityResolver` resolves the trusted current caller and session; `AuthorizationPolicy` independently approves the result.
+Restored provider state locates memory but does not grant access.
+Keep its owner, tenant, namespace, and topic bindings stable and protected against tampering.
+
+The standard Agent Framework recall API adds an owner equality filter.
+The standalone RAM client requires the application to supply its own filters and authorize access.
+Cross-owner search is separated under `RedisIrisAdministrativeMemorySearch.SearchAcrossOwnersAsync` and requires an explicit authorization callback and reason.
+
+`TenantId` is a host authorization binding, not a server-side RAM partition.
+Use globally unique owners, authorized namespaces, or separate stores for tenant isolation.
+With delegated RAM authentication, owner IDs must match the validated JWT subject; use namespaces or separate stores for additional tenant boundaries.
+
+== Delegated user authentication
+
+RAM sends the agent credential in `Authorization: Bearer` and the delegated user JWT in `X-Iris-User-Token`.
+The configured delegated-token provider runs for every request and fails before dispatch if the token is missing, empty, or expired.
+The service must trust the issuer and audience and enforce ownership; forwarding a JWT alone does not enable isolation.
+
+Context Retriever sends the agent key in `X-API-Key` and a delegated JWT in `Authorization: Bearer`.
+It intersects the key's boundary with access tags derived from trusted JWT claims.
+Use xref:context-retriever.adoc[per-invocation resolution] for user-facing tools and change non-secret credential versions whenever credentials rotate.
+
+== Transport and telemetry
+
+Use HTTPS in production and least-privilege service credentials.
+Plain HTTP is allowed only for loopback development.
+Manually supplied RAM `HttpClient` handlers must disable both redirects and cookies:
+
+[source,csharp]
+----
+using var http = new HttpClient(new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+});
+----
+
+Never log credentials, raw messages, memory text, owner IDs, or session IDs.
+Custom HTTP logging must sanitize request paths and redact `Authorization` and `X-Iris-User-Token`.
+See xref:observability.adoc[observability] for the bounded telemetry surface and the explicit sensitive MCP logging opt-in.
+
+== Untrusted context and deletion
+
+Stored history, summaries, recalled memories, and tool results are untrusted data and may contain hostile instructions.
+Do not promote their content to system instructions.
+
+Session deletion does not retract promoted memories, and background extraction can outlive cleanup.
+Read the xref:operational-contract.adoc[operational contract] before promising retention or complete erasure.

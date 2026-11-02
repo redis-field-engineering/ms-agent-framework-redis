@@ -1,0 +1,18 @@
+= Session and long-term memory
+
+`Redis.Iris.AgentMemory` is a standalone .NET client for the Redis Agent Memory (RAM) HTTP API. Use it when your application needs to store conversation events, retrieve sessions and summaries, search long-term memories, or delete session events and known memory records. It exposes `RedisAgentMemoryClient` through `IRedisAgentMemoryClient` and can be used independently of Microsoft Agent Framework.
+
+Agent Memory provides two complementary kinds of memory:
+
+[cols="1,1,1",options="header"]
+|===
+| Memory | What it contains | When an application uses it
+| Session memory | Conversation events and a service-generated summary, when available | Resume a conversation and provide its recent history to the model
+| Long-term memory | Searchable memories that can remain useful across conversations | Recall a user's preferences or other relevant facts in a new session
+|===
+
+For example, a traveler says “I prefer window seats” in one conversation. Session memory preserves that exchange. When the service's extraction process promotes the preference into long-term memory, the application can retrieve it during a later conversation for the same owner. Promotion is asynchronous and depends on the service configuration; saving an event does not mean the preference is immediately available for recall.
+
+The connector handles HTTP requests, typed contracts, credentials, cancellation, and diagnostics. Redis Agent Memory performs storage, search, summarization, and background extraction. You need an existing Agent Memory endpoint, store ID, and agent credential; an ordinary Redis server alone does not expose this API. Deployments enforcing personal ownership also require a delegated user token.
+
+When using the client directly, your application supplies search filters and authorizes access to sessions and records. The raw client does not automatically add an owner filter to every search. Deleting a session does not delete memories already extracted from it. See the xref:security.adoc[security model] and xref:operational-contract.adoc[API limits and persistence semantics].

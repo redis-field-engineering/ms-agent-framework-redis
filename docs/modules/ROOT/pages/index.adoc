@@ -1,0 +1,72 @@
+= Redis Iris for .NET
+:description: Durable agent history, owner-scoped memory, and authorized business context for Microsoft Agent Framework.
+
+[.eyebrow]
+Redis Field Engineering · Developer preview
+
+[.lead]
+Give your agents conversation history that survives restarts, memory that carries across sessions, and tools for retrieving current business records.
+
+The Redis Iris .NET connectors integrate Redis Agent Memory and Context Retriever with Microsoft Agent Framework.
+Use the standalone clients in other .NET applications, or attach the providers to an existing model-backed agent.
+
+[.doc-cards]
+--
+[.doc-card]
+****
+[.title]
+xref:quickstart.adoc[Build your first integration →]
+
+Install the preview, write a synthetic memory event, and attach the Agent Framework providers.
+****
+
+[.doc-card]
+****
+[.title]
+xref:samples.adoc[Explore working examples →]
+
+Run a persistent agent, a travel assistant with DevUI, or step through the C# notebooks.
+****
+
+[.doc-card]
+****
+[.title]
+xref:agent-memory.adoc[Remember across sessions →]
+
+Understand session history, summaries, long-term recall, and asynchronous memory promotion.
+****
+
+[.doc-card]
+****
+[.title]
+xref:context-retriever.adoc[Retrieve live business context →]
+
+Expose authorized MCP tools with per-invocation identity, scoped keys, and delegated tokens.
+****
+--
+
+== Choose your integration
+
+[cols="2,3,2",options="header"]
+|===
+|You need |Use |Start here
+|Durable conversations and relevant personal memory
+|Agent Memory client and Agent Framework providers
+|xref:agent-framework.adoc[Agent Framework providers]
+|Current records exposed through authorized MCP tools
+|Context Retriever client and provider
+|xref:context-retriever.adoc[Tools and authorization]
+|A DataModel built from .NET domain types
+|POCO modeling and optional surface management
+|xref:context-retriever-modeling.adoc[Modeling and management]
+|===
+
+== Before you start
+
+You need an existing Redis Agent Memory store or Context Retriever surface for the connector you use.
+An ordinary Redis server alone does not expose these APIs; service provisioning is separate from these libraries.
+See the https://redis.io/docs/latest/develop/ai/context-engine/[Redis Iris documentation] for deployment options.
+
+The packages are maintained by Redis Field Engineering and are not Microsoft products.
+All five packages share version `{preview-version}`; a version in source does not imply publication to NuGet.
+Read xref:packages.adoc[compatibility], the xref:security.adoc[security model], and the xref:operational-contract.adoc[preview operational contract] before using customer data.

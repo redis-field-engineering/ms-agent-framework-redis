@@ -1,0 +1,16 @@
+* xref:index.adoc[Overview]
+* Get started
+** xref:quickstart.adoc[Standalone .NET quickstart]
+** xref:local-development.adoc[Run locally]
+** xref:samples.adoc[Samples and notebooks]
+* Agent Memory
+** xref:agent-memory.adoc[Session and long-term memory]
+** xref:agent-framework.adoc[Agent Framework providers]
+* Context Retriever
+** xref:context-retriever.adoc[Tools and authorization]
+** xref:context-retriever-modeling.adoc[POCO modeling and management]
+* Reference and operations
+** xref:packages.adoc[Packages and compatibility]
+** xref:security.adoc[Security model]
+** xref:operational-contract.adoc[Preview operational contract]
+** xref:observability.adoc[Observability]

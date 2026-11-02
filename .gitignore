@@ -12,6 +12,9 @@ __pycache__/
 .DS_Store
 .idea/
 .terraform/
+node_modules/
+build/
+.cache/
 *.tfstate
 *.tfstate.*
 *.tfvars

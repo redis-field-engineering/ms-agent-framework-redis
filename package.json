@@ -1,0 +1,18 @@
+{
+  "name": "redis-iris-agent-framework-docs",
+  "private": true,
+  "description": "Antora documentation for the Redis Iris .NET connectors",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "docs:build": "antora --stacktrace antora-playbook.yml",
+    "docs:serve": "http-server build/site -a 127.0.0.1 -p 8080 -c-1",
+    "docs:preview": "npm run docs:build && npm run docs:serve",
+    "docs:check": "npm run docs:build && node eng/check-docs.mjs"
+  },
+  "devDependencies": {
+    "@antora/cli": "3.2.2",
+    "@antora/lunr-extension": "1.0.0-alpha.13",
+    "@antora/site-generator": "3.2.2",
+    "http-server": "14.1.1"
+  }
+}

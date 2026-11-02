@@ -1,0 +1,77 @@
+= Samples and notebooks
+
+Clone {repo-url}[the repository] and follow xref:local-development.adoc[Run locally] for SDK, runtime, and environment setup.
+Run commands below from the repository root.
+Use synthetic development data for live examples.
+
+== Persistent Agent Memory demo
+
+Teach a preference in Session A, recreate the agent over that same durable session, then recall the promoted preference in a new Session B for the same owner.
+Requires an Agent Memory store and a model credential.
+
+[source,bash]
+----
+./scripts/run-agent-memory-demo.sh teach
+./scripts/run-agent-memory-demo.sh recall
+# Or run both stages with bounded polling for memory promotion:
+./scripts/run-agent-memory-demo.sh full
+----
+
+Promotion is asynchronous; an event write does not make a fact immediately searchable.
+The sample also displays the durable session, managed summary, and bounded history window separately.
+See the {source-url}/samples/RedisIrisPersistentAgent/README.md[persistent sample guide] for configuration and owner-scoped cleanup.
+
+== ASP.NET Core DevUI travel assistant
+
+Combine remembered preferences with current travel bookings through a scoped Context Retriever surface.
+The sample supports local multi-user sign-in, optional OIDC, and a Compose observability stack.
+
+Generate the model and synthetic records without credentials:
+
+[source,bash]
+----
+dotnet run --project samples/RedisIrisDevUI -- --print-context-model
+dotnet run --project samples/RedisIrisDevUI -- --print-context-seed
+----
+
+Follow the {source-url}/samples/RedisIrisDevUI/README.md[DevUI guide] to provision the surface, seed records, configure credentials, and run the UI.
+Provisioning and seeding change the chosen service; the guide distinguishes those operations from running the client.
+
+== Context Retriever POCO model
+
+Export a deterministic DataModel from annotated .NET types without connecting to a service:
+
+[source,bash]
+----
+dotnet run --project samples/RedisIrisContextModel -- ./travel-context-model.json
+----
+
+The optional `--deploy` mode uses explicitly supplied administrative credentials and creates a new surface on each run.
+See the {source-url}/samples/RedisIrisContextModel/README.md[model sample] and xref:context-retriever-modeling.adoc[modeling guide].
+
+== C# notebooks
+
+The {source-url}/notebooks/csharp/README.md[notebook guide] covers kernel setup, environment files, credential bundles, and all walkthroughs.
+
+[cols="1,3",options="header"]
+|===
+|Notebook |Walkthrough
+|00 |Shared Context Retriever provisioning and seeding, with executable PowerShell and Bash variants.
+|01 |Agent Memory data plane: events, summaries, search, and scoped cleanup.
+|02 |Agent Framework memory: durable history and cross-session recall.
+|03 |Context Retriever fundamentals: discovery, queries, and per-invocation tools.
+|04 |POCO modeling: compilation, relationships, comparison, and a typed live read.
+|05 |Remembered preferences combined with current travel records.
+|06 |Two users with isolated context and optional live authorization checks.
+|07 |Tune history windows, summaries, filters, thresholds, and recall budgets.
+|08 |Diagnose failures, cancellation, traces, and metrics.
+|===
+
+Notebooks 06–08 run offline by default with a notebook-only HTTP fixture and need no service or model credentials.
+Live notebook prerequisites vary; follow the notebook guide before running cells.
+Clear outputs and execution counts before sharing or committing:
+
+[source,bash]
+----
+python3 eng/check-notebook-outputs.py
+----
