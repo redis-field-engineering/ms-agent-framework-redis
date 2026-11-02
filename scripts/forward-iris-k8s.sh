@@ -2,7 +2,7 @@
 # Keep these forwards in the foreground; Ctrl-C cleans up every child.
 set -euo pipefail
 
-export KUBECONFIG="${KUBECONFIG:-${HOME}/projects/terraform/redis-iris-k8s/secrets/kubeconfig}"
+export KUBECONFIG="${KUBECONFIG:-${HOME}/.kube/config}"
 namespace="${IRIS_K8S_NAMESPACE:-redis-iris}"
 kubectl -n "${namespace}" get pods --request-timeout=15s >/dev/null
 

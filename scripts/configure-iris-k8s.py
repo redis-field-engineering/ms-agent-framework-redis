@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Configure the native samples against the existing Iris GKE deployment.
+"""Configure the native samples against an existing Iris Kubernetes deployment.
 
-Requires active Google authentication and forward-iris-k8s.sh. Creates only a
+Requires authenticated cluster access and forward-iris-k8s.sh. Uses KUBECONFIG
+or ~/.kube/config, and IRIS_K8S_NAMESPACE or redis-iris. Creates only a
 dedicated travel surface, its scoped keys, and synthetic travel records. Never
 prints credentials, changes infrastructure, or modifies the bootstrap surface.
 """
@@ -24,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PRIVATE = ROOT / "secrets"
 NAMESPACE = os.environ.get("IRIS_K8S_NAMESPACE", "redis-iris")
 KUBECONFIG = os.environ.get(
-    "KUBECONFIG", str(Path.home() / "projects/terraform/redis-iris-k8s/secrets/kubeconfig")
+    "KUBECONFIG", str(Path.home() / ".kube/config")
 )
 ADMIN = "http://127.0.0.1:8082"
 SURFACE_NAME = "ms-agent-framework-travel"
@@ -50,7 +51,7 @@ def cluster_secret(name, field):
         capture_output=True, timeout=45,
     )
     if result.returncode:
-        raise RuntimeError("Kubernetes secret lookup failed. Check kubeconfig and run gcloud auth login.")
+        raise RuntimeError("Kubernetes secret lookup failed. Check kubeconfig and cluster authentication.")
     return base64.b64decode(json.loads(result.stdout)["data"][field]).decode().strip()
 
 
