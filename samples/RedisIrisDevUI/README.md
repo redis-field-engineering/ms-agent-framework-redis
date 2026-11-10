@@ -4,6 +4,23 @@ This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI patte
 
 The hosted agent uses Agent Framework's in-memory session store so each DevUI conversation preserves its `AgentSession` and Redis Iris provider state across HTTP requests. It supports an optional multi-user demonstration mode that partitions sessions, RAM, and Context Retriever access by a trusted composite tenant/traveler identity. The store remains process-local; production hosting should use its normal identity provider and durable session storage.
 
+## Code layout
+
+Start with [`Program.cs`](Program.cs): it handles command-line exports, composes the host, and maps routes. The implementation is grouped by responsibility:
+
+| Location | Responsibility |
+| --- | --- |
+| `Configuration/SampleOptions.cs` | Environment settings, defaults, and startup validation |
+| `Agent/` | Travel assistant registration, RAM/session identity, and authorized Context Retriever access |
+| `Authentication/` | Local user directory, cookie/OIDC setup, validated claims, and delegated tokens |
+| `Endpoints/` | Sign-in/sign-out, owner-scoped RAM inspection and cleanup, and context inspection |
+| `Pages/SamplePages.cs` | Dashboard and local sign-in HTML |
+| `Context/TravelContext.cs` | Annotated travel entities, compiled DataModel, and synthetic records |
+| `Context/ContextExports.cs` | Credential-free model, seed, and user-profile CLI exports |
+| `Diagnostics/SampleTelemetry.cs` | OpenTelemetry registration and optional console diagnostics |
+
+The agent APIs and sample inspection/cleanup routes share one authorization group in `Program.cs`. Sign-in routes are mapped separately, and DevUI uses its own endpoint authorization hook. To change the agent's prompt or providers, start in `Agent/TravelAgentRegistration.cs`; to change a travel entity or seed record, start in `Context/TravelContext.cs`.
+
 ## Run
 
 Start with the repository root `.env.example` and fill the RAM endpoint/store/key, model key, and Context Retriever endpoint/key in `.env.local`. Provision the travel surface and seed its synthetic records as described below before running DevUI. Then run:
