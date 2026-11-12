@@ -12,7 +12,7 @@ Context Retriever discovers and invokes server-defined MCP tools, binds trusted 
 
 == Persistence and retry semantics
 
-The connector performs one HTTP send per RAM operation and does not install a retry policy. A successful append returns a server event ID. There is no application idempotency key or exactly-once guarantee across retries, failures, process restarts, or concurrent invocations. The event writer coordinates the two providers in one normal invocation; it is not a transactional outbox.
+The connector performs one HTTP send per RAM operation and does not install a retry policy. A successful append returns a server event ID. Direct callers using the Iris API may supply `AddSessionEventRequest.IdempotencyKey` (required by stores with session.append input hooks). Reuse it only for an identical request. The Agent Framework event writer does not generate durable idempotency keys, and there is no exactly-once guarantee across retries, failures, process restarts, or concurrent invocations. The event writer coordinates the two providers in one normal invocation; it is not a transactional outbox.
 
 [cols="1,1",options="header"]
 |===

@@ -70,7 +70,7 @@ Context Retriever is optional for memory-only applications. It complements remem
 | Build SDK | .NET 10 (selected by `global.json`; required for `.slnx`) |
 | Application runtimes | .NET 10 LTS recommended; .NET 8 compatibility tested until its November 10, 2026 end of support |
 | Microsoft Agent Framework | 1.23.x |
-| Redis Agent Memory | Managed or self-managed `/v1` data plane |
+| Redis Agent Memory | Original `/v1/stores` API (default), or current self-managed Iris API with `ApiMode = AgentMemoryApiMode.Iris` |
 | Redis Context Retriever | Managed MCP or self-managed 0.4.2 over loopback |
 
 The connector uses Agent Framework 1.23.0.

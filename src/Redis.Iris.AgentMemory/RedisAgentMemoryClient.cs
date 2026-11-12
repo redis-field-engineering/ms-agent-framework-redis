@@ -19,7 +19,9 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     private readonly HttpClient _httpClient;
     private readonly IAgentMemoryCredentialProvider _credentialProvider;
     private readonly IAgentMemoryDelegatedTokenProvider? _delegatedTokenProvider;
-    private readonly string _storePath;
+    private readonly bool _useIrisApi;
+    private readonly string _sessionPath;
+    private readonly string _memoryPath;
     private readonly Uri _endpoint;
 
     /// <summary>Initializes a new client.</summary>
@@ -54,12 +56,20 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         }
 
         ValidateIdentifier(options.StoreId, nameof(options.StoreId));
+        if (!Enum.IsDefined(options.ApiMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options.ApiMode));
+        }
 
         this._httpClient = httpClient;
         this._credentialProvider = credentialProvider;
         this._delegatedTokenProvider = delegatedTokenProvider;
         this._endpoint = options.Endpoint;
-        this._storePath = $"v1/stores/{Uri.EscapeDataString(options.StoreId)}";
+        this._useIrisApi = options.ApiMode == AgentMemoryApiMode.Iris;
+        var prefix = this._useIrisApi ? "iris/data/v1/agent-memory/stores" : "v1/stores";
+        var storePath = $"{prefix}/{Uri.EscapeDataString(options.StoreId)}";
+        this._sessionPath = $"{storePath}/{(this._useIrisApi ? "sessions" : "session-memory")}";
+        this._memoryPath = $"{storePath}/{(this._useIrisApi ? "memories" : "long-term-memory")}";
     }
 
     /// <inheritdoc />
@@ -91,8 +101,18 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
                 throw new ArgumentException("Metadata must not exceed 16 KiB.", nameof(request));
             }
 
-            using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/session-memory/events", cancellationToken).ConfigureAwait(false);
-            message.Content = JsonContent.Create(request, options: JsonOptions);
+            if (request.IdempotencyKey is not null && !this._useIrisApi)
+            {
+                throw new NotSupportedException("IdempotencyKey requires the Iris API.");
+            }
+
+            var path = this._useIrisApi
+                ? request.SessionId is null ? this._sessionPath : $"{this._sessionPath}/{Uri.EscapeDataString(request.SessionId)}/events"
+                : $"{this._sessionPath}/events";
+            using var message = await this.CreateRequestAsync(HttpMethod.Post, path, cancellationToken).ConfigureAwait(false);
+            message.Content = this._useIrisApi
+                ? JsonContent.Create(IrisAgentMemoryContract.EventRequest(request), options: JsonOptions)
+                : JsonContent.Create(request, options: JsonOptions);
             using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
             await EnsureSuccessAsync(response, "session.add_event", cancellationToken).ConfigureAwait(false);
             var content = await response.Content.ReadFromJsonAsync<AddSessionEventResponse>(JsonOptions, cancellationToken).ConfigureAwait(false);
@@ -129,13 +149,15 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         try
         {
             ValidateIdentifier(sessionId, nameof(sessionId), 255);
-            var path = $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}";
+            var path = $"{this._sessionPath}/{Uri.EscapeDataString(sessionId)}";
             if (includeSummarizedEvents)
             {
                 path += "?includeSummarisedEvents=true";
             }
 
-            var result = await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
+            var result = this._useIrisApi
+                ? (await this.GetAsync<IrisAgentMemoryContract.SessionResponse>(path, "session.get", cancellationToken).ConfigureAwait(false)).ToPublic()
+                : await this.GetAsync<SessionMemory>(path, "session.get", cancellationToken).ConfigureAwait(false);
             AgentMemoryDiagnostics.SetSuccess(activity, result.Events.Count);
             AgentMemoryDiagnostics.RecordMetricsSuccess("session.load", metricStart, result.Events.Count);
             return result;
@@ -168,7 +190,7 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
         ValidateIdentifier(sessionId, nameof(sessionId), 255);
         ValidateIdentifier(eventId, nameof(eventId), 255);
         return this.DeleteAsync(
-            $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}/events/{Uri.EscapeDataString(eventId)}",
+            $"{this._sessionPath}/{Uri.EscapeDataString(sessionId)}/events/{Uri.EscapeDataString(eventId)}",
             "session.delete_event",
             cancellationToken);
     }
@@ -178,31 +200,36 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
     {
         ValidateIdentifier(sessionId, nameof(sessionId), 255);
         return this.DeleteAsync(
-            $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}",
+            $"{this._sessionPath}/{Uri.EscapeDataString(sessionId)}",
             "session.delete",
             cancellationToken);
     }
 
     /// <inheritdoc />
-    public Task<SessionListResult> ListSessionsAsync(
+    public async Task<SessionListResult> ListSessionsAsync(
         string ownerId,
         int limit = 100,
         string? pageToken = null,
         CancellationToken cancellationToken = default)
     {
         ValidateIdentifier(ownerId, nameof(ownerId), 64);
-        if (limit is < 1 or > 1000)
+        var maximumLimit = this._useIrisApi ? 200 : 1000;
+        if (limit < 1 || limit > maximumLimit)
         {
-            throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be between 1 and 1000.");
+            throw new ArgumentOutOfRangeException(nameof(limit), $"Limit must be between 1 and {maximumLimit}.");
         }
 
-        var path = $"{this._storePath}/session-memory?filterOwnerId={Uri.EscapeDataString(ownerId)}&limit={limit}";
+        var ownerParameter = this._useIrisApi ? "ownerId" : "filterOwnerId";
+        var path = $"{this._sessionPath}?{ownerParameter}={Uri.EscapeDataString(ownerId)}&limit={limit}";
         if (pageToken is not null)
         {
-            path += $"&pageToken={Uri.EscapeDataString(pageToken)}";
+            var cursorParameter = this._useIrisApi ? "cursor" : "pageToken";
+            path += $"&{cursorParameter}={Uri.EscapeDataString(pageToken)}";
         }
 
-        return this.GetAsync<SessionListResult>(path, "session.list", cancellationToken);
+        return this._useIrisApi
+            ? (await this.GetAsync<IrisAgentMemoryContract.SessionListResponse>(path, "session.list", cancellationToken).ConfigureAwait(false)).ToPublic()
+            : await this.GetAsync<SessionListResult>(path, "session.list", cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -223,12 +250,20 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
                 throw new ArgumentOutOfRangeException(nameof(request), "SimilarityThreshold must be between 0 and 1.");
             }
 
-            using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._storePath}/long-term-memory/search", cancellationToken).ConfigureAwait(false);
-            message.Content = JsonContent.Create(request, options: JsonOptions);
+            using var content = this._useIrisApi
+                ? JsonContent.Create(IrisAgentMemoryContract.SearchRequest(request), options: JsonOptions)
+                : JsonContent.Create(request, options: JsonOptions);
+            using var message = await this.CreateRequestAsync(HttpMethod.Post, $"{this._memoryPath}/search", cancellationToken).ConfigureAwait(false);
+            message.Content = content;
             using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
             await EnsureSuccessAsync(response, "ltm.search", cancellationToken).ConfigureAwait(false);
-            var result = await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidDataException("Agent Memory returned no search result.");
+            var result = this._useIrisApi
+                ? (await response.Content.ReadFromJsonAsync<IrisAgentMemoryContract.SearchResponse>(JsonOptions, cancellationToken).ConfigureAwait(false))?.ToPublic()
+                : await response.Content.ReadFromJsonAsync<LongTermMemorySearchResult>(JsonOptions, cancellationToken).ConfigureAwait(false);
+            if (result is null)
+            {
+                throw new InvalidDataException("Agent Memory returned no search result.");
+            }
             AgentMemoryDiagnostics.SetSuccess(activity, result.Items.Count);
             AgentMemoryDiagnostics.RecordMetricsSuccess("ltm.search", metricStart, result.Items.Count);
             return result;
@@ -257,18 +292,22 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
             ValidateIdentifier(memoryId, nameof(memoryIds), 64);
         }
 
-        using var message = await this.CreateRequestAsync(HttpMethod.Delete, $"{this._storePath}/long-term-memory", cancellationToken).ConfigureAwait(false);
+        var method = this._useIrisApi ? HttpMethod.Post : HttpMethod.Delete;
+        var path = this._useIrisApi ? $"{this._memoryPath}/bulk-delete" : this._memoryPath;
+        using var message = await this.CreateRequestAsync(method, path, cancellationToken).ConfigureAwait(false);
         message.Content = JsonContent.Create(new { memoryIds }, options: JsonOptions);
         using var response = await this._httpClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
         await EnsureSuccessAsync(response, "ltm.bulk_delete", cancellationToken).ConfigureAwait(false);
-        return await response.Content.ReadFromJsonAsync<BulkDeleteLongTermMemoriesResult>(JsonOptions, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidDataException("Agent Memory returned no bulk delete result.");
+        var result = this._useIrisApi
+            ? (await response.Content.ReadFromJsonAsync<IrisAgentMemoryContract.BulkDeleteResponse>(JsonOptions, cancellationToken).ConfigureAwait(false))?.ToPublic()
+            : await response.Content.ReadFromJsonAsync<BulkDeleteLongTermMemoriesResult>(JsonOptions, cancellationToken).ConfigureAwait(false);
+        return result ?? throw new InvalidDataException("Agent Memory returned no bulk delete result.");
     }
 
     private async Task<SessionEvent> GetEventAsync(string sessionId, string eventId, CancellationToken cancellationToken)
     {
         var wrapper = await this.GetAsync<GetSessionEventResponse>(
-            $"{this._storePath}/session-memory/{Uri.EscapeDataString(sessionId)}/events/{Uri.EscapeDataString(eventId)}",
+            $"{this._sessionPath}/{Uri.EscapeDataString(sessionId)}/events/{Uri.EscapeDataString(eventId)}",
             "session.get_event",
             cancellationToken).ConfigureAwait(false);
         return wrapper.Event;
@@ -331,6 +370,11 @@ public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
                 error.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String)
             {
                 errorCode = type.GetString();
+            }
+            else if (body.RootElement.ValueKind == JsonValueKind.Object &&
+                body.RootElement.TryGetProperty("type", out var problemType) && problemType.ValueKind == JsonValueKind.String)
+            {
+                errorCode = problemType.GetString();
             }
         }
         catch (JsonException)

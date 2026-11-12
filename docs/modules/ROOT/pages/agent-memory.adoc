@@ -16,3 +16,42 @@ For example, a traveler says “I prefer window seats” in one conversation. Se
 The connector handles HTTP requests, typed contracts, credentials, cancellation, and diagnostics. Redis Agent Memory performs storage, search, summarization, and background extraction. You need an existing Agent Memory endpoint, store ID, and agent credential; an ordinary Redis server alone does not expose this API. Deployments enforcing personal ownership also require a delegated user token.
 
 When using the client directly, your application supplies search filters and authorizes access to sessions and records. The raw client does not automatically add an owner filter to every search. Deleting a session does not delete memories already extracted from it. See the xref:security.adoc[security model] and xref:operational-contract.adoc[API limits and persistence semantics].
+
+== Select the deployment's API contract
+
+The default, `AgentMemoryApiMode.Legacy`, preserves the original managed-service routes. For current self-managed deployments, select `AgentMemoryApiMode.Iris`:
+
+[source,csharp]
+----
+using var http = new HttpClient(new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+});
+var client = new RedisAgentMemoryClient(http, new RedisAgentMemoryClientOptions
+{
+    Endpoint = new Uri("http://localhost:9000"),
+    StoreId = storeId,
+    ApiMode = AgentMemoryApiMode.Iris,
+}, new FixedAgentMemoryCredentialProvider(agentKey));
+----
+
+The same `ApiMode` property is available on the options passed to `AddRedisIrisAgentMemory`. Both samples accept `REDIS_IRIS_API_MODE=Iris`; omitting it selects `Legacy`. Supply the service base URL without the API route. Gateway prefixes are preserved, and remote endpoints require HTTPS; plain HTTP is allowed only on loopback. Configure a delegated token provider as well when the service enforces user ownership.
+
+[cols="1,1,1",options="header"]
+|===
+| Operation | Legacy | Iris
+| Store base | `/v1/stores/\{storeId}` | `/iris/data/v1/agent-memory/stores/\{storeId}`
+| Append event | `POST /session-memory/events` | `POST /sessions/\{sessionId}/events`; `POST /sessions` when the ID is omitted
+| Read/delete session | `/session-memory/\{sessionId}` | `/sessions/\{sessionId}`
+| Read/delete event | `/session-memory/\{sessionId}/events/\{eventId}` | `/sessions/\{sessionId}/events/\{eventId}`
+| List sessions | `GET /session-memory` | `GET /sessions`
+| Search memories | `POST /long-term-memory/search` | `POST /memories/search`
+| Bulk delete | `DELETE /long-term-memory` | `POST /memories/bulk-delete`
+|===
+
+Operation paths are relative to the store base. Choose the mode by the deployed contract: current managed deployments can also expose the Iris routes. There is no endpoint probing or automatic fallback between contracts. The Iris mapping follows the https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/api-reference/[Redis Agent Memory API reference].
+
+The client translates the public contracts for Iris: `NamespaceRef` becomes `namespaceId`, search `Text` becomes `query`, `SimilarityThreshold` becomes `minScore`, and `FilterOp` becomes `filter.op` (`ALL` or `ANY`). Response `memoryId` values become `LongTermMemoryRecord.Id`. `NextPageToken`/`PageToken` map to `nextCursor`/`cursor`. Session listing accepts limits of 1–200 in Iris mode (1–1000 in legacy mode); `SessionListResult.Total` is `-1` in Iris mode because that API supplies no total. Continue until `NextPageToken` is absent.
+
+Iris does not support the deprecated namespace-label filter, or `Ne`/`All` operators on `NamespaceRef`. The client rejects these before sending instead of dropping scope constraints. Use namespace IDs with `Eq` or `In`. For stores with session.append input hooks, direct append callers must supply `IdempotencyKey`; the Agent Framework event writer does not supply one.

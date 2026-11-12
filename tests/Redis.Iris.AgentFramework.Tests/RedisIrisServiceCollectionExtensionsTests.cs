@@ -37,6 +37,16 @@ public sealed class RedisIrisServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void RegistrationRejectsUnknownApiMode()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ServiceCollection().AddRedisIrisAgentMemory(options =>
+        {
+            Valid(options, true);
+            options.ApiMode = (AgentMemoryApiMode)99;
+        }));
+    }
+
+    [Fact]
     public async Task RegistrationWiresDelegationAndRedactsBothCredentials()
     {
         var services = new ServiceCollection();

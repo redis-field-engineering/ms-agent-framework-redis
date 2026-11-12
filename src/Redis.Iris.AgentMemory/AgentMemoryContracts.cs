@@ -45,6 +45,10 @@ public sealed record AddSessionEventRequest
 
     /// <summary>Gets optional JSON metadata.</summary>
     public JsonElement? Metadata { get; init; }
+
+    /// <summary>Gets an optional Iris API idempotency key, required by stores with session.append input hooks.</summary>
+    /// <remarks>Reuse only for identical requests. Not supported by the legacy API.</remarks>
+    public string? IdempotencyKey { get; init; }
 }
 
 /// <summary>A stable namespace reference used on writes.</summary>
@@ -182,6 +186,9 @@ public sealed record LongTermMemorySearchResult(
     string? NextPageToken = null);
 
 /// <summary>A page of session IDs.</summary>
+/// <param name="Items">The session IDs in this page.</param>
+/// <param name="Total">The service-reported total, or -1 when the Iris API does not supply a total.</param>
+/// <param name="NextPageToken">The opaque continuation token (the Iris API's nextCursor).</param>
 public sealed record SessionListResult(
     IReadOnlyList<string> Items,
     int Total,

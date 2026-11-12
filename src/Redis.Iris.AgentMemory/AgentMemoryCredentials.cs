@@ -24,12 +24,25 @@ public sealed class FixedAgentMemoryCredentialProvider(string credential) : IAge
     }
 }
 
+/// <summary>Selects the Agent Memory HTTP contract exposed by a deployment.</summary>
+public enum AgentMemoryApiMode
+{
+    /// <summary>The original /v1/stores API with session-memory and long-term-memory resources.</summary>
+    Legacy,
+
+    /// <summary>The /iris/data/v1/agent-memory/stores API used by current self-managed deployments.</summary>
+    Iris,
+}
+
 /// <summary>Configures a Redis Agent Memory data-plane client.</summary>
 public sealed class RedisAgentMemoryClientOptions
 {
-    /// <summary>Gets or sets the absolute data-plane endpoint.</summary>
+    /// <summary>Gets or sets the absolute service base URL, without the API route. Gateway prefixes are preserved.</summary>
     public required Uri Endpoint { get; set; }
 
     /// <summary>Gets or sets the default store identifier.</summary>
     public required string StoreId { get; set; }
+
+    /// <summary>Gets or sets the HTTP contract. Defaults to the original API for existing deployments.</summary>
+    public AgentMemoryApiMode ApiMode { get; set; } = AgentMemoryApiMode.Legacy;
 }

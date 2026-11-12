@@ -12,8 +12,10 @@ namespace Redis.Iris.AgentFramework.Tests;
 
 public class AgentMemoryTransportTests
 {
-    [Fact]
-    public async Task RamDiClientRejectsRedirectWithoutForwardingUserToken()
+    [Theory]
+    [InlineData(AgentMemoryApiMode.Legacy, "/v1/stores/store/session-memory/session")]
+    [InlineData(AgentMemoryApiMode.Iris, "/iris/data/v1/agent-memory/stores/store/sessions/session")]
+    public async Task RamDiClientRejectsRedirectWithoutForwardingUserToken(AgentMemoryApiMode apiMode, string path)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         using var original = new TcpListener(IPAddress.Loopback, 0);
@@ -26,6 +28,7 @@ public class AgentMemoryTransportTests
         services.AddRedisIrisAgentMemory(o =>
         {
             o.Endpoint = new($"http://127.0.0.1:{originalPort}/");
+            o.ApiMode = apiMode;
             o.StoreId = "store"; o.Credential = "synthetic-agent-key";
             o.IdentityResolver = _ => new("tenant", "owner", "session", "owner", "agent");
             o.AuthorizationPolicy = _ => true;
@@ -35,7 +38,9 @@ public class AgentMemoryTransportTests
         var error = await Assert.ThrowsAsync<AgentMemoryException>(() =>
             provider.GetRequiredService<IRedisAgentMemoryClient>().GetSessionMemoryAsync("session", cancellationToken: timeout.Token));
         Assert.Equal(HttpStatusCode.Found, error.StatusCode);
-        Assert.Contains("X-Iris-User-Token: synthetic-user-token", await first, StringComparison.OrdinalIgnoreCase);
+        var headers = await first;
+        Assert.Contains($"GET {path} HTTP/1.1", headers, StringComparison.Ordinal);
+        Assert.Contains("X-Iris-User-Token: synthetic-user-token", headers, StringComparison.OrdinalIgnoreCase);
         Assert.False(target.Pending());
     }
 

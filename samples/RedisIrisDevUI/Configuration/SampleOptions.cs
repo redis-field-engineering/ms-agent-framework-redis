@@ -1,6 +1,7 @@
 // Copyright (c) Redis, Inc.
 
 using Redis.Iris.ContextRetriever;
+using Redis.Iris.AgentMemory;
 
 namespace RedisIrisDevUI;
 
@@ -8,6 +9,7 @@ namespace RedisIrisDevUI;
 internal sealed class SampleOptions
 {
     public string Endpoint { get; }
+    public AgentMemoryApiMode ApiMode { get; }
     public string StoreId { get; }
     public string IrisApiKey { get; }
     public string OpenAiApiKey { get; }
@@ -28,6 +30,10 @@ internal sealed class SampleOptions
     public SampleOptions(IConfiguration configuration)
     {
         Endpoint = Required(configuration, "REDIS_IRIS_ENDPOINT");
+        var apiMode = configuration["REDIS_IRIS_API_MODE"] ?? "Legacy";
+        ApiMode = Enum.TryParse<AgentMemoryApiMode>(apiMode, ignoreCase: true, out var parsedMode) && Enum.IsDefined(parsedMode)
+            ? parsedMode
+            : throw new InvalidOperationException("REDIS_IRIS_API_MODE must be Legacy or Iris.");
         StoreId = Required(configuration, "REDIS_IRIS_STORE_ID");
         IrisApiKey = Required(configuration, "REDIS_IRIS_API_KEY");
         OpenAiApiKey = Required(configuration, "OPENAI_API_KEY");

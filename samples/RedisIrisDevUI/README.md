@@ -236,3 +236,7 @@ This is deliberately a local-development sample. It refuses to start outside the
 The local OIDC flow uses an authorization-code GET callback. In Development, nonce and correlation cookies use `SameSite=Lax` without `Secure` only for HTTP loopback hosts, because older Safari versions reject Secure cookies on HTTP localhost. HTTPS and non-loopback requests retain the framework's Secure cookie defaults. Correlation, nonce validation, and PKCE remain enabled.
 
 Start each sign-in from `http://localhost:5080/login` in the browser that will complete it. Do not copy a Cognito login URL between browsers or reuse a completed callback. A missing or expired login cookie leads to a safe retry page. Restarting this sample clears the server-side ticket store and requires a fresh sign-in.
+
+### Self-managed Agent Memory routes
+
+Set `REDIS_IRIS_API_MODE=Iris` for deployments exposing `/iris/data/v1/agent-memory/stores/{storeId}`. Set `REDIS_IRIS_ENDPOINT` to the service base URL (for example, `http://localhost:9000` for a local port-forward), without the API route. HTTPS is required beyond loopback. The default, `Legacy`, preserves the original `/v1/stores` contract. Choose the mode based on the deployed API; current managed deployments may also expose the Iris contract.
