@@ -21,7 +21,7 @@ Preview APIs may change before a stable release.
 |Build SDK |.NET 10, selected by {source-url}/global.json[`global.json`] and required for `.slnx`.
 |Library target |`net8.0`; consumable from .NET 10 applications.
 |Application runtime |.NET 10 LTS recommended. .NET 8 compatibility is tested until its November 10, 2026 end of support.
-|Microsoft Agent Framework |1.23.x; the connector uses 1.23.0.
+|Microsoft Agent Framework |1.19.0 minimum; connector tested with 1.19.0 and 1.23.0. Samples and notebooks use 1.19.0.
 |Redis Agent Memory |Original `/v1/stores` API (default), or current self-managed Iris API with `ApiMode = AgentMemoryApiMode.Iris`.
 |Redis Context Retriever |Managed MCP or self-managed 0.4.2 over loopback.
 |===
