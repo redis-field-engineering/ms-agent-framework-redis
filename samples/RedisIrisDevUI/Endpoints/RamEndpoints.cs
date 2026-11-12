@@ -89,7 +89,7 @@ internal static class RamEndpoints
         string? pageToken = null;
         do
         {
-            var page = await client.ListSessionsAsync(ownerId, limit: 1000, pageToken, cancellationToken);
+            var page = await client.ListSessionsAsync(ownerId, limit: 200, pageToken, cancellationToken);
             items.AddRange(page.Items);
             pageToken = page.NextPageToken;
         }

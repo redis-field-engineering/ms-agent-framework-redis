@@ -79,3 +79,7 @@ The deliberately small default window of four messages makes the distinction vis
 6. Redis operations participate in the connector's tracing and metrics surfaces.
 
 The `clear` route deliberately deletes both memory tiers because deleting a session alone does not delete memories that have already been promoted.
+
+### Self-managed Agent Memory routes
+
+Set `REDIS_IRIS_API_MODE=Iris` for deployments exposing `/iris/data/v1/agent-memory/stores/{storeId}`. Set `REDIS_IRIS_ENDPOINT` to the service base URL (for example, `http://localhost:9000` for a local port-forward), without the API route. HTTPS is required beyond loopback. The default, `Legacy`, preserves the original `/v1/stores` contract. Choose the mode based on the deployed API; current managed deployments may also expose the Iris contract.

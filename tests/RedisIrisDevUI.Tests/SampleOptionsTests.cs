@@ -1,6 +1,7 @@
 // Copyright (c) Redis, Inc.
 
 using System.Text.Json;
+using Redis.Iris.AgentMemory;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -13,6 +14,7 @@ public sealed class SampleOptionsTests
     {
         var settings = CreateOptions();
 
+        Assert.Equal(AgentMemoryApiMode.Legacy, settings.ApiMode);
         Assert.False(settings.AuthenticationRequired);
         Assert.False(settings.AccessTokenInspectorEnabled);
         Assert.Equal(4, settings.ShortTermWindow);
@@ -53,6 +55,8 @@ public sealed class SampleOptionsTests
     }
 
     [Theory]
+    [InlineData("REDIS_IRIS_API_MODE", "invalid")]
+    [InlineData("REDIS_IRIS_API_MODE", "99")]
     [InlineData("REDIS_IRIS_SHORT_TERM_WINDOW", "0")]
     [InlineData("REDIS_IRIS_SHORT_TERM_WINDOW", "invalid")]
     [InlineData("DEVUI_ALLOW_REMOTE_ACCESS", "invalid")]
@@ -75,6 +79,13 @@ public sealed class SampleOptionsTests
 
         var error = Assert.Throws<InvalidOperationException>(() => CreateOptions(configuration));
         Assert.Contains(name, error.Message);
+    }
+
+    [Fact]
+    public void IrisApiModeCanBeSelectedForSelfManagedDeployments()
+    {
+        var settings = CreateOptions(new() { ["REDIS_IRIS_API_MODE"] = "iris" });
+        Assert.Equal(AgentMemoryApiMode.Iris, settings.ApiMode);
     }
 
     private static Dictionary<string, string?> OidcConfiguration() => new()

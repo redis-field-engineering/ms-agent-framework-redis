@@ -177,6 +177,46 @@ public sealed class RedisAgentMemoryClientTests
     }
 
     [Fact]
+    public async Task DefaultApiModePreservesLegacySearchContract()
+    {
+        var handler = new RecordingHandler(_ => JsonResponse(HttpStatusCode.OK, """
+            {"items":[{"id":"memory-1","text":"hello","createdAt":"2026-09-25T12:00:00Z","updatedAt":"2026-09-25T12:00:00Z","namespaceRef":{"id":"ns-1"}}],"nextPageToken":"next"}
+            """));
+        var result = await CreateClient(handler).SearchLongTermMemoryAsync(new()
+        {
+            Text = "hello",
+            SimilarityThreshold = 0.75,
+            PageToken = "previous",
+            Filter = new() { NamespaceRef = new() { Eq = "ns-1" } },
+        });
+
+        Assert.Equal("https://memory.example/v1/stores/store-1/long-term-memory/search", handler.Request!.RequestUri!.AbsoluteUri);
+        using var body = JsonDocument.Parse(handler.Body!);
+        Assert.Equal("hello", body.RootElement.GetProperty("text").GetString());
+        Assert.Equal(0.75, body.RootElement.GetProperty("similarityThreshold").GetDouble());
+        Assert.Equal("all", body.RootElement.GetProperty("filterOp").GetString());
+        Assert.Equal("previous", body.RootElement.GetProperty("pageToken").GetString());
+        Assert.Equal("ns-1", body.RootElement.GetProperty("filter").GetProperty("namespaceRef").GetProperty("eq").GetString());
+        Assert.Equal("memory-1", Assert.Single(result.Items).Id);
+        Assert.Equal("ns-1", result.Items[0].NamespaceRef!.Id);
+        Assert.Equal("next", result.NextPageToken);
+    }
+
+    [Fact]
+    public async Task LegacyApiRejectsIdempotencyKeyRatherThanIgnoringIt()
+    {
+        var client = CreateClient(new RecordingHandler(_ => throw new InvalidOperationException("HTTP should not be called.")));
+        await Assert.ThrowsAsync<NotSupportedException>(() => client.AddSessionEventAsync(new()
+        {
+            ActorId = "owner",
+            Role = SessionEventRole.USER,
+            Content = [new("hello")],
+            CreatedAt = DateTimeOffset.UtcNow,
+            IdempotencyKey = "event-key",
+        }));
+    }
+
+    [Fact]
     public async Task RequestsAlwaysUseTheValidatedEndpointInsteadOfClientBaseAddress()
     {
         var handler = new RecordingHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));

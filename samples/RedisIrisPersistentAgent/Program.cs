@@ -21,6 +21,10 @@ if (command is not ("teach" or "recall" or "full" or "clear"))
 
 var irisEndpoint = Required("REDIS_IRIS_ENDPOINT");
 var irisStoreId = Required("REDIS_IRIS_STORE_ID");
+var irisApiModeValue = Environment.GetEnvironmentVariable("REDIS_IRIS_API_MODE") ?? "Legacy";
+var irisApiMode = Enum.TryParse<AgentMemoryApiMode>(irisApiModeValue, ignoreCase: true, out var parsedApiMode) && Enum.IsDefined(parsedApiMode)
+    ? parsedApiMode
+    : throw new InvalidOperationException("REDIS_IRIS_API_MODE must be Legacy or Iris.");
 var irisApiKey = Required("REDIS_IRIS_API_KEY");
 var openAiApiKey = command == "clear" ? string.Empty : Required("OPENAI_API_KEY");
 var ownerId = Environment.GetEnvironmentVariable("SAMPLE_OWNER_ID") ?? "redis-iris-demo-shopper";
@@ -110,7 +114,7 @@ async Task ClearOwnerMemoriesAsync()
     string? sessionPageToken = null;
     do
     {
-        var page = await client.ListSessionsAsync(ownerId, limit: 1000, pageToken: sessionPageToken);
+        var page = await client.ListSessionsAsync(ownerId, limit: 200, pageToken: sessionPageToken);
         sessionIds.AddRange(page.Items);
         sessionPageToken = page.NextPageToken;
     }
@@ -206,7 +210,7 @@ async Task PrintMemoryLayersAsync(string sessionId)
 
 RedisAgentMemoryClient CreateMemoryClient() => new(
     new HttpClient(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false }),
-    new() { Endpoint = new Uri(irisEndpoint), StoreId = irisStoreId },
+    new() { Endpoint = new Uri(irisEndpoint), StoreId = irisStoreId, ApiMode = irisApiMode },
     new FixedAgentMemoryCredentialProvider(irisApiKey));
 
 (AIAgent Agent, ServiceProvider Services) CreateAgent(string trustedSessionId)
@@ -217,6 +221,7 @@ RedisAgentMemoryClient CreateMemoryClient() => new(
     {
         options.Endpoint = new Uri(irisEndpoint);
         options.StoreId = irisStoreId;
+        options.ApiMode = irisApiMode;
         options.Credential = irisApiKey;
         options.IdentityResolver = _ => new(
             TenantId: "redis-iris-demo",

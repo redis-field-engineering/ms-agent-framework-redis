@@ -28,8 +28,10 @@ public sealed record RedisIrisIdentityContext(
 /// <summary>Configures the standard Redis Iris Agent Framework integration.</summary>
 public sealed class RedisIrisAgentMemoryOptions
 {
-    /// <summary>Gets or sets the managed Agent Memory data-plane endpoint.</summary>
+    /// <summary>Gets or sets the Agent Memory service base URL, without the API route.</summary>
     public Uri? Endpoint { get; set; }
+    /// <summary>Gets or sets the HTTP contract. Use Iris for current self-managed deployments.</summary>
+    public AgentMemoryApiMode ApiMode { get; set; } = AgentMemoryApiMode.Legacy;
     /// <summary>Gets or sets the Agent Memory store ID.</summary>
     public string? StoreId { get; set; }
     /// <summary>Gets or sets a fixed bearer credential.</summary>
@@ -71,7 +73,7 @@ public static class RedisIrisServiceCollectionExtensions
         Validate(options);
 
         var credentialProvider = options.CredentialProvider ?? new FixedAgentMemoryCredentialProvider(options.Credential!);
-        var clientOptions = new RedisAgentMemoryClientOptions { Endpoint = options.Endpoint!, StoreId = options.StoreId! };
+        var clientOptions = new RedisAgentMemoryClientOptions { Endpoint = options.Endpoint!, StoreId = options.StoreId!, ApiMode = options.ApiMode };
         services.AddSingleton(options);
         services.AddSingleton(credentialProvider);
         services.AddHttpClient("Redis.Iris.AgentMemory", client => client.BaseAddress = options.Endpoint)
@@ -150,6 +152,11 @@ public static class RedisIrisServiceCollectionExtensions
 
     private static void Validate(RedisIrisAgentMemoryOptions options)
     {
+        if (!Enum.IsDefined(options.ApiMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options.ApiMode));
+        }
+
         if (options.Endpoint is null || !options.Endpoint.IsAbsoluteUri || options.Endpoint.Scheme != Uri.UriSchemeHttps && options.Endpoint.Scheme != Uri.UriSchemeHttp)
         {
             throw new ArgumentException("Endpoint must be an absolute HTTP or HTTPS URI.", nameof(options.Endpoint));

@@ -43,6 +43,7 @@ internal static class TravelAgentRegistration
         {
             options.Endpoint = new Uri(settings.Endpoint);
             options.StoreId = settings.StoreId;
+            options.ApiMode = settings.ApiMode;
             options.Credential = settings.IrisApiKey;
             options.DelegatedTokenProvider = settings.RamDelegatedAuth ? new TravelRamDelegatedTokenProvider(userAccessor) : null;
             options.IdentityResolver = identityResolver.Resolve;
