@@ -5,6 +5,7 @@ using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using Redis.Iris.AgentFramework;
+using Redis.Iris.AgentMemory;
 using Redis.Iris.ContextRetriever;
 
 namespace RedisIrisDevUI;
@@ -20,6 +21,9 @@ internal static class TravelAgentRegistration
         var userAccessor = new TravelUserAccessor(httpContextAccessor, settings.UserDirectory,
             settings.CreateLegacyUser(), settings.AuthenticationMode, settings.RamDelegatedAuth);
         var identityResolver = new RamIdentityResolver(userAccessor);
+        var memoryProposals = new MemoryProposalStore();
+        builder.Services.AddSingleton(memoryProposals);
+        builder.Services.AddSingleton<TravelMemoryToolsProvider>();
 
         builder.Services.AddSingleton(settings.UserDirectory);
         builder.Services.AddSingleton<IHttpContextAccessor>(httpContextAccessor);
@@ -47,6 +51,8 @@ internal static class TravelAgentRegistration
             options.Credential = settings.IrisApiKey;
             options.DelegatedTokenProvider = settings.RamDelegatedAuth ? new TravelRamDelegatedTokenProvider(userAccessor) : null;
             options.IdentityResolver = identityResolver.Resolve;
+            options.MemoryWrites.AuthorizeWriteAsync = (_, proposal, _) =>
+                ValueTask.FromResult(memoryProposals.IsApproved(userAccessor.Current.IsolationKey, proposal));
             options.AuthorizationPolicy = identity =>
             {
                 var user = userAccessor.Current;
@@ -55,6 +61,18 @@ internal static class TravelAgentRegistration
             options.ChatHistory.MaxMessagesToRetrieve = settings.ShortTermWindow;
             options.Memory.Search = new() { Limit = 5, SimilarityThreshold = 0.25 };
             options.RecallFailurePolicy = RedisIrisFailurePolicy.FailClosed;
+        });
+
+        builder.Services.AddSingleton(services =>
+        {
+            var memoryOptions = services.GetRequiredService<RedisIrisAgentMemoryOptions>();
+            return new RedisIrisLongTermMemoryWriter(services.GetRequiredService<IRedisAgentMemoryClient>(), new()
+            {
+                ApiMode = memoryOptions.ApiMode,
+                IdentityResolver = identityResolver.ResolveMemoryWriteIdentity,
+                AuthorizationPolicy = memoryOptions.AuthorizationPolicy,
+                MemoryWrites = memoryOptions.MemoryWrites,
+            });
         });
 
         builder.AddAIAgent(AgentName, (services, name) =>
@@ -78,6 +96,7 @@ internal static class TravelAgentRegistration
                     services.GetRequiredService<TravelIdentityContextProvider>(),
                     services.GetRequiredService<RedisIrisMemoryProvider>(),
                     services.GetRequiredService<RedisContextRetrieverProvider>(),
+                    .. settings.MemoryToolsEnabled ? new AIContextProvider[] { services.GetRequiredService<TravelMemoryToolsProvider>() } : [],
                 ],
             })
             .AsBuilder()

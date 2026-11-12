@@ -52,3 +52,28 @@ Production endpoints require HTTPS; plain HTTP is accepted only on loopback for 
 Resolved namespace IDs are carried to session writes and recall filters; history reads verify the returned namespace. Resolved topics constrain recall with an all-topics filter, intersected with configured filters. RAM session events have no topic field, so this does not assign topics to extracted memories. Tenant, namespace, and topic identity are rechecked against persisted session state on every operation. Previously serialized state without these bindings must be recreated by the trusted host after authorizing the session.
 
 RAM has no tenant filter in these operations. `TenantId` binds host authorization to a session; it does not create a server-side partition. In a shared store, use globally unique owner IDs and/or distinct authorized namespace resources for tenants. Never rely on identical owner IDs plus different `TenantId` strings alone. For delegated RAM, owner IDs must remain the validated JWT subject; use namespaces or separate stores for additional tenant boundaries.
+
+## Direct long-term memory writes
+
+The raw client exposes current-Iris create, get, PATCH, and PUT operations. It does
+not authorize individual records on the application's behalf. Use
+`RedisIrisLongTermMemoryWriter` for ordinary user operations: it binds owner,
+namespace, and mandatory topics to the trusted current identity, revalidates
+session bindings and edit targets, and sends the revision that was reviewed.
+The writer's exact-namespace scope includes only unnamespaced records when no
+namespace is configured. Ownership transfers and cross-namespace edits require
+separately authorized administrative code using the raw client.
+
+`MemoryWrites.AuthorizeWriteAsync` denies by default. Approve only a specific
+immutable proposal associated with an explicit authenticated user action. Agent
+memory tools can prepare proposals but cannot approve or execute them. The sample
+keeps proposals in a bounded, expiring in-memory store and uses antiforgery-protected
+Save requests. The agent's text and tool arguments cannot set approval, identity,
+credentials, or expected revisions. Proposal text and recalled memory are untrusted
+data; the editor renders them as text. Direct writes do not apply the service's
+extraction exclusions; hosts can add `ValidateContentAsync` to enforce their policy.
+
+Conditional writes require a server-provided revision. HTTP 412 is a conflict,
+never permission to overwrite unconditionally. A successful write followed by a
+failed refresh is reported as committed with refresh pending. Retry the original
+proposal; do not generate new IDs or replay keys after an uncertain response.

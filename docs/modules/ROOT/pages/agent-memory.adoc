@@ -55,3 +55,89 @@ Operation paths are relative to the store base. Choose the mode by the deployed 
 The client translates the public contracts for Iris: `NamespaceRef` becomes `namespaceId`, search `Text` becomes `query`, `SimilarityThreshold` becomes `minScore`, and `FilterOp` becomes `filter.op` (`ALL` or `ANY`). Response `memoryId` values become `LongTermMemoryRecord.Id`. `NextPageToken`/`PageToken` map to `nextCursor`/`cursor`. Session listing accepts limits of 1–200 in Iris mode (1–1000 in legacy mode); `SessionListResult.Total` is `-1` in Iris mode because that API supplies no total. Continue until `NextPageToken` is absent.
 
 Iris does not support the deprecated namespace-label filter, or `Ne`/`All` operators on `NamespaceRef`. The client rejects these before sending instead of dropping scope constraints. Use namespace IDs with `Eq` or `In`. For stores with session.append input hooks, direct append callers must supply `IdempotencyKey`; the Agent Framework event writer does not supply one.
+
+== Create and correct long-term memories directly
+
+Direct writes require `AgentMemoryApiMode.Iris` and a deployment supporting the current memory mutation contract. They do not wait for extraction. Use direct writes for an explicit user preference, an application form, or an import; retain ordinary session capture for conversation history. Direct writes do not apply extraction's sensitive-data exclusions, so apply your own content policy.
+
+[source,csharp]
+----
+var id = Guid.NewGuid().ToString("N"); // Generate once per logical create, not per retry.
+var create = new BulkCreateLongTermMemoriesRequest
+{
+    IdempotencyKey = Guid.NewGuid().ToString("N"),
+    Memories = [new()
+    {
+        Id = id,
+        OwnerId = authorizedOwnerId,
+        Text = "The traveler prefers a window seat.",
+        MemoryType = "semantic",
+        Topics = ["travel", "seating"],
+    }],
+};
+var created = await client.BulkCreateLongTermMemoriesAsync(create);
+if (created.Errors is { Count: > 0 })
+    throw new InvalidOperationException("Some memories were not created; inspect their status and type.");
+
+var current = await client.GetLongTermMemoryAsync(id);
+// The raw client is an administrative primitive: verify owner/namespace access before exposing or editing it.
+if (current.OwnerId != authorizedOwnerId)
+    throw new UnauthorizedAccessException();
+if (string.IsNullOrEmpty(current.Revision))
+    throw new NotSupportedException("Conditional editing requires a server-provided revision.");
+
+var patch = new UpdateLongTermMemoryRequest
+{
+    Text = "The traveler now prefers an aisle seat.",
+    SessionId = current.SessionId ?? "", // Explicitly preserve the existing session link.
+    ExpectedRevision = current.Revision,
+    IdempotencyKey = Guid.NewGuid().ToString("N"),
+};
+var updated = await client.UpdateLongTermMemoryAsync(id, patch);
+----
+
+Creation accepts 1–100 records and never overwrites an existing ID. Inspect `Created` and `Errors` even on HTTP success. Retry an uncertain request with the identical body and idempotency key. A retry of only failed records is a new request with a new key and the same record IDs. The connector does not automatically retry writes. A repeated ID alone prevents duplication but does not replay a successful response.
+
+`Revision` is opaque. Send the revision the editor actually reviewed as `ExpectedRevision`. HTTP 412 means somebody changed the record; preserve the draft, read the latest record, and reconcile before submitting a new request. Do not silently refresh the revision or remove the condition. An older server or record without a revision cannot support this editing guarantee. HTTP 409 can indicate duplicate creation or reuse of a request key with different content. Replay retention is controlled by Iris; it is not permanent.
+
+PATCH omits null fields and supports empty topic lists to clear tags. The published contract permits an omitted session link to be cleared, so include the current `SessionId` to preserve it. Attributes are updated through `UpsertLongTermMemoryAsync`, whose PUT body is a complete replacement. Copy all fields you intend to retain, including owner, type, session, namespace, topics, and attributes, and supply the reviewed revision. Omitted optional fields are cleared. PUT resets the store TTL and returns `UpsertLongTermMemoryResult` (`Id`, `Created`); GET returns the resulting record and revision. Generic content writes cannot edit document-managed records. Namespace-only PATCH preserves expiration.
+
+The new operations throw `NotSupportedException` in legacy mode. Existing API-mode defaults and older operations are unchanged. The current wire contract and deployment-specific availability are described in the https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/long-term-memory/[Redis long-term memory guide].
+
+=== Host-authorized writes and agent tools
+
+`AddRedisIrisAgentMemory` registers `RedisIrisLongTermMemoryWriter`. It resolves the current identity, checks resumed session bindings, and restricts reads and edits to the exact owner and namespace (including unnamespaced records when no namespace is configured). It also enforces mandatory topics. It rejects document-managed or unversioned records for editing.
+
+The writer prepares immutable proposals before execution:
+
+[source,csharp]
+----
+// Configure during AddRedisIrisAgentMemory registration:
+options.MemoryWrites.AuthorizeWriteAsync = (identity, proposal, cancellationToken) =>
+    approvalService.IsApprovedAsync(identity, proposal, cancellationToken);
+// Optional: reject content that should not be stored directly.
+options.MemoryWrites.ValidateContentAsync = (proposal, cancellationToken) =>
+    contentPolicy.ValidateAsync(proposal.Text, cancellationToken);
+
+// In trusted application code, after an explicit user request:
+var proposal = writer.PrepareCreate("The traveler prefers a window seat.", ["travel"], session: session);
+// Show this exact proposal in the host's approval UI and retain it for retries.
+var result = await writer.ExecuteAsync(proposal, session, cancellationToken);
+----
+
+Approval is denied by default. The callback must check a trusted user action bound to the exact proposal; a model argument or prompt statement is not authorization. Proposals expire after 15 minutes. The application must retain the same proposal across uncertain retries. `RefreshPending` means the write committed but its subsequent GET failed; do not report it as a failed save.
+
+To offer agent tools, attach `RedisIrisMemoryTools.Create(writer, session, onProposalAsync)` to the invocation's tools. The callback stores the proposal in your approval UI. `find_long_term_memories` identifies editable records, `create_long_term_memory` proposes a new memory, and `update_long_term_memory` proposes a correction to an observed record. These tools never execute or approve writes themselves. They return `needs_approval` until the host saves the proposal. Enable them only in agents where users should request direct memory changes.
+
+The DevUI sample provides `/memories` for creation, editing, custom attributes, and approving agent proposals. Set `REDIS_IRIS_MEMORY_TOOLS_ENABLED=true` to add the proposal tools to chat; this requires Iris API mode. The editor and tools use the same writer. Browser saves require antiforgery tokens and authenticated owner scope. A conflict preserves the draft and requires reviewing the latest record before saving. Sample proposals are bounded in-memory state and disappear on restart.
+
+=== Live mutation validation
+
+Use a dedicated current-Iris test store and set `REDIS_IRIS_ENDPOINT`, `REDIS_IRIS_STORE_ID`, `REDIS_IRIS_API_KEY`, and `REDIS_IRIS_RUN_DIRECT_MEMORY_TESTS=1`. Then run:
+
+[source,bash]
+----
+dotnet test tests/Redis.Iris.AgentMemory.LiveTests --filter FullyQualifiedName~IrisDirectMemoryLiveTests
+----
+
+This creates synthetic IDs, verifies duplicate/replay handling, revision conflicts, replacement, conditional PUT against a missing record, and recall, then cleans up its IDs. It does not enable the existing legacy live suites. Run it against each server build used for deployment, especially before relying on conditional replacement semantics.

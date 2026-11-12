@@ -178,7 +178,14 @@ public sealed record LongTermMemoryRecord(
     string? OwnerId = null,
     NamespaceReference? NamespaceRef = null,
     IReadOnlyList<string>? Topics = null,
-    IReadOnlyDictionary<string, JsonElement>? Attributes = null);
+    IReadOnlyDictionary<string, JsonElement>? Attributes = null)
+{
+    /// <summary>Gets the opaque revision for conditional writes. Older servers or records can omit it.</summary>
+    public string? Revision { get; init; }
+
+    /// <summary>Gets whether document ingestion protects this record from generic content edits.</summary>
+    public bool? DocumentManaged { get; init; }
+}
 
 /// <summary>A page of long-term memory search results.</summary>
 public sealed record LongTermMemorySearchResult(
@@ -195,7 +202,13 @@ public sealed record SessionListResult(
     string? NextPageToken = null);
 
 /// <summary>Describes one failed item in a bulk operation.</summary>
-public sealed record BulkOperationError(string Id, string Error);
+public sealed record BulkOperationError(string Id, string Error)
+{
+    /// <summary>Gets the per-record HTTP status, when supplied by Iris.</summary>
+    public int? Status { get; init; }
+    /// <summary>Gets the problem type URI, when supplied by Iris.</summary>
+    public string? Type { get; init; }
+}
 
 /// <summary>The result of deleting long-term memories in bulk.</summary>
 public sealed record BulkDeleteLongTermMemoriesResult(

@@ -60,6 +60,17 @@ public static class AgentMemoryDiagnostics
         ErrorCounter.Add(1, new KeyValuePair<string, object?>("redis.iris.operation", operation));
     }
 
+    internal static void RecordPartialSuccess(Activity? activity, string operation, long startedAt, int status)
+    {
+        activity?.SetTag("redis.iris.outcome", "partial_failure");
+        activity?.SetTag("http.response.status_code", status);
+        activity?.SetStatus(ActivityStatusCode.Error);
+        Duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
+            new KeyValuePair<string, object?>("redis.iris.operation", operation),
+            new KeyValuePair<string, object?>("redis.iris.outcome", "partial_failure"));
+        ErrorCounter.Add(1, new KeyValuePair<string, object?>("redis.iris.operation", operation));
+    }
+
     internal static void RecordMetricsNotFound(string operation, long startedAt) =>
         Duration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds,
             new KeyValuePair<string, object?>("redis.iris.operation", operation),

@@ -89,8 +89,12 @@ internal static class IrisAgentMemoryContract
         IReadOnlyList<string>? Topics = null,
         IReadOnlyDictionary<string, JsonElement>? Attributes = null)
     {
+        public string? Revision { get; init; }
+        public bool? DocumentManaged { get; init; }
+
         internal LongTermMemoryRecord ToPublic() => new(MemoryId, Text, CreatedAt, UpdatedAt,
-            MemoryType, SessionId, OwnerId, NamespaceId is null ? null : new(NamespaceId), Topics, Attributes);
+            MemoryType, SessionId, OwnerId, NamespaceId is null ? null : new(NamespaceId), Topics, Attributes)
+        { Revision = Revision, DocumentManaged = DocumentManaged };
     }
 
     internal sealed record SearchResponse(IReadOnlyList<MemoryRecord> Items, string? NextCursor = null)
@@ -98,11 +102,14 @@ internal static class IrisAgentMemoryContract
         internal LongTermMemorySearchResult ToPublic() => new(Items.Select(item => item.ToPublic()).ToArray(), NextCursor);
     }
 
-    internal sealed record BulkError(string MemoryId, string Title, string? Detail = null);
+    internal sealed record BulkError(string MemoryId, string Title, string? Detail = null, int? Status = null, string? Type = null)
+    {
+        internal BulkOperationError ToPublic() => new(MemoryId, Detail ?? Title) { Status = Status, Type = Type };
+    }
 
     internal sealed record BulkDeleteResponse(IReadOnlyList<string> Deleted, IReadOnlyList<BulkError>? Errors = null)
     {
         internal BulkDeleteLongTermMemoriesResult ToPublic() => new(Deleted,
-            Errors?.Select(error => new BulkOperationError(error.MemoryId, error.Detail ?? error.Title)).ToArray());
+            Errors?.Select(error => error.ToPublic()).ToArray());
     }
 }

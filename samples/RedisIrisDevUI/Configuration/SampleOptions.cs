@@ -18,6 +18,7 @@ internal sealed class SampleOptions
     public string OwnerId { get; }
     public string Model { get; }
     public int ShortTermWindow { get; }
+    public bool MemoryToolsEnabled { get; }
     public bool RamDelegatedAuth { get; }
     public bool AllowRemoteAccess { get; }
     public bool ConsoleTelemetry { get; }
@@ -34,6 +35,9 @@ internal sealed class SampleOptions
         ApiMode = Enum.TryParse<AgentMemoryApiMode>(apiMode, ignoreCase: true, out var parsedMode) && Enum.IsDefined(parsedMode)
             ? parsedMode
             : throw new InvalidOperationException("REDIS_IRIS_API_MODE must be Legacy or Iris.");
+        MemoryToolsEnabled = ParseBoolean(configuration, "REDIS_IRIS_MEMORY_TOOLS_ENABLED", false);
+        if (MemoryToolsEnabled && ApiMode != AgentMemoryApiMode.Iris)
+            throw new InvalidOperationException("Memory tools require REDIS_IRIS_API_MODE=Iris.");
         StoreId = Required(configuration, "REDIS_IRIS_STORE_ID");
         IrisApiKey = Required(configuration, "REDIS_IRIS_API_KEY");
         OpenAiApiKey = Required(configuration, "OPENAI_API_KEY");

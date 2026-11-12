@@ -8,7 +8,7 @@ using System.Text.Json.Serialization;
 namespace Redis.Iris.AgentMemory;
 
 /// <summary>An HTTP client for the Redis Agent Memory data plane.</summary>
-public sealed class RedisAgentMemoryClient : IRedisAgentMemoryClient
+public sealed partial class RedisAgentMemoryClient : IRedisAgentMemoryClient
 {
     private const int MaximumMetadataBytes = 16 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)

@@ -80,3 +80,14 @@ The libraries target `net8.0` and can be consumed by .NET 10 applications. The b
 ## License and package version
 
 This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All five packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
+
+### Direct long-term memory writes
+
+Current-Iris deployments support `BulkCreateLongTermMemoriesAsync`,
+`GetLongTermMemoryAsync`, `UpdateLongTermMemoryAsync`, and
+`UpsertLongTermMemoryAsync`. Use stable IDs and request replay keys, inspect bulk
+errors, and send the reviewed revision for edits. The Agent Framework writer adds
+host authorization; opt-in agent tools prepare changes for explicit user approval.
+The DevUI's `/memories` page creates and edits records and saves agent proposals.
+See [the Agent Memory guide](docs/modules/ROOT/pages/agent-memory.adoc) and
+[the sample configuration](samples/RedisIrisDevUI/README.md).

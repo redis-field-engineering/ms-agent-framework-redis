@@ -10,6 +10,14 @@ internal sealed class RamIdentityResolver(TravelUserAccessor users)
 {
     private readonly ConditionalWeakTable<AgentSession, RedisIrisIdentityContext> _identities = new();
 
+    // Only direct editor actions have no AgentSession; conversation capture still requires one.
+    public RedisIrisIdentityContext ResolveMemoryWriteIdentity(AgentSession? session)
+    {
+        if (session is not null) return Resolve(session);
+        var user = users.Current;
+        return new(user.TenantId, user.RamOwnerId, "memory-editor", user.TravelerId, TravelAgentRegistration.AgentName);
+    }
+
     public RedisIrisIdentityContext Resolve(AgentSession? session)
     {
         ArgumentNullException.ThrowIfNull(session);
