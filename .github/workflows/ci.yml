@@ -28,6 +28,20 @@ jobs:
       - run: python3 eng/test-release-recovery.py
       - run: ./eng/pack.sh
       - run: ./eng/package-smoke.sh
+  agent-framework-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        agent-framework-version: ["1.19.0", "1.23.0"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+      - name: Test connector compatibility
+        run: dotnet test tests/Redis.Iris.AgentFramework.Tests/Redis.Iris.AgentFramework.Tests.csproj -c Release -p:AgentFrameworkVersion=${{ matrix.agent-framework-version }}
   sample-container:
     runs-on: ubuntu-latest
     steps:

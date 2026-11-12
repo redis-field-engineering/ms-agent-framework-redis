@@ -1,12 +1,13 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <AgentFrameworkVersion Condition="'$(AgentFrameworkVersion)' == ''">1.19.0</AgentFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Microsoft.Agents.AI" Version="1.23.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.23.0-preview.260928.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.23.0-preview.260928.1" />
-    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.23.0-alpha.260928.1" />
+    <PackageVersion Include="Microsoft.Agents.AI" Version="$(AgentFrameworkVersion)" />
+    <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.19.0-preview.260822.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.19.0-preview.260822.1" />
+    <PackageVersion Include="Microsoft.Agents.AI.Hosting.OpenAI" Version="1.19.0-alpha.260822.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.31" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
