@@ -138,7 +138,8 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
             events = events.TakeLast(maximum);
         }
 
-        var messages = events.Select(sessionEvent =>
+        var selectedEvents = events.ToList();
+        var messages = selectedEvents.Select(sessionEvent =>
         {
             var message = this._mapper.ToChatMessage(sessionEvent);
             if (message.Role == ChatRole.User)
@@ -149,6 +150,7 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
             }
             return message;
         }).ToList();
+        this.UseTextForIncompleteToolExchanges(messages, selectedEvents);
         if (this._options.IncludeSessionSummary && memory.Summary is { Text: var summary } && !string.IsNullOrWhiteSpace(summary))
         {
             var bounded = summary.Length <= this._options.MaxSummaryCharacters ? summary : summary[..this._options.MaxSummaryCharacters];
@@ -158,6 +160,49 @@ public sealed class RedisIrisChatHistoryProvider : ChatHistoryProvider
             });
         }
         return messages;
+    }
+
+    private void UseTextForIncompleteToolExchanges(List<ChatMessage> messages, IReadOnlyList<SessionEvent> events)
+    {
+        // Limits, server compaction, or a partially failed write can split an exchange.
+        // Only replay native calls when every call has exactly one immediately following result.
+        var complete = new HashSet<int>();
+        for (var index = 0; index < messages.Count; index++)
+        {
+            var calls = messages[index].Contents.OfType<FunctionCallContent>().ToList();
+            if (messages[index].Role != ChatRole.Assistant || calls.Count == 0)
+            {
+                continue;
+            }
+
+            var pending = calls.Select(static call => call.CallId).ToHashSet(StringComparer.Ordinal);
+            var valid = pending.Count == calls.Count;
+            var end = index + 1;
+            while (end < messages.Count && messages[end].Role == ChatRole.Tool)
+            {
+                foreach (var result in messages[end].Contents.OfType<FunctionResultContent>())
+                {
+                    valid &= pending.Remove(result.CallId);
+                }
+                end++;
+            }
+
+            if (valid && pending.Count == 0)
+            {
+                for (var member = index; member < end; member++)
+                {
+                    complete.Add(member);
+                }
+            }
+        }
+
+        for (var index = 0; index < messages.Count; index++)
+        {
+            if (!complete.Contains(index) && messages[index].Contents.Any(static part => part is FunctionCallContent or FunctionResultContent))
+            {
+                messages[index] = this._mapper.ToChatMessage(events[index], restoreToolMessages: false);
+            }
+        }
     }
 
     /// <inheritdoc />

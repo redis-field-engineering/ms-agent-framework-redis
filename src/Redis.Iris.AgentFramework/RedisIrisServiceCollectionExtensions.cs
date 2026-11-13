@@ -54,6 +54,8 @@ public sealed class RedisIrisAgentMemoryOptions
     public RedisIrisFailurePolicy WriteFailurePolicy { get; set; } = RedisIrisFailurePolicy.FailClosed;
     /// <summary>Gets or sets chat-history options.</summary>
     public RedisIrisChatHistoryProviderOptions ChatHistory { get; set; } = new();
+    /// <summary>Gets or sets message persistence and reconstruction options.</summary>
+    public RedisIrisMessageMappingOptions MessageMapping { get; set; } = new();
     /// <summary>Gets host approval and content policies for direct memory writes.</summary>
     public RedisIrisMemoryWriteOptions MemoryWrites { get; set; } = new();
     /// <summary>Gets or sets memory-provider options.</summary>
@@ -88,7 +90,8 @@ public static class RedisIrisServiceCollectionExtensions
             clientOptions,
             credentialProvider,
             options.DelegatedTokenProvider));
-        services.AddSingleton<RedisIrisMessageMapper>();
+        services.AddSingleton(provider => new RedisIrisMessageMapper(
+            provider.GetService<RedisIrisMessageMappingOptions>() ?? options.MessageMapping));
         services.AddSingleton<RedisIrisLongTermMemorySearch>();
         services.AddSingleton<RedisIrisLongTermMemoryWriter>();
         services.AddSingleton(provider => new RedisIrisSessionEventWriter(

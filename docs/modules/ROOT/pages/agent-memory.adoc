@@ -56,6 +56,39 @@ The client translates the public contracts for Iris: `NamespaceRef` becomes `nam
 
 Iris does not support the deprecated namespace-label filter, or `Ne`/`All` operators on `NamespaceRef`. The client rejects these before sending instead of dropping scope constraints. Use namespace IDs with `Eq` or `In`. For stores with session.append input hooks, direct append callers must supply `IdempotencyKey`; the Agent Framework event writer does not supply one.
 
+[#tool-history]
+== Preserve tool calls and results in history
+
+Tool history is opt-in. Enable it when registering the Agent Framework integration:
+
+[source,csharp]
+----
+services.AddRedisIrisAgentMemory(options =>
+{
+    // Configure endpoint, credentials, identity, and authorization as usual.
+    options.MessageMapping.StoreToolMessages = true;
+});
+----
+
+For a manually constructed provider, pass a configured mapper:
+
+[source,csharp]
+----
+var mapper = new RedisIrisMessageMapper(new()
+{
+    StoreToolMessages = true,
+});
+var history = new RedisIrisChatHistoryProvider(client, stateInitializer, mapper);
+----
+
+This preserves assistant `FunctionCallContent` (call IDs, names, and JSON arguments), tool-role `FunctionResultContent` (call IDs and JSON results), and text parts in the same message, in their original order. Values must be JSON-serializable; arbitrary CLR types are restored as JSON values, not their original runtime types. Exception objects and raw provider objects are not persisted. The same mapper is used for event capture when the memory provider is configured without a chat-history provider.
+
+Both API modes store a readable text representation in event content and a versioned structured representation under the `redis.iris.tool_message` metadata key. Redis Agent Memory has no tool role, so tool-result events use the assistant role and agent actor on the wire; the mapper restores their tool role when loading history. Text content remains available to server summaries and memory extraction. Existing text-only events load unchanged, and readers with the option disabled see the readable text representation.
+
+The complete metadata envelope must fit the client's 16 KiB per-event limit. Oversized or non-serializable payloads fail the write under the configured write-failure policy; they are not silently truncated. Use the history provider's response filter to redact or reduce large tool results before storage while preserving call IDs and matching results.
+
+`MaxMessagesToRetrieve` still limits the number of events. When a limit, server compaction, deletion, or partial write leaves an incomplete exchange, the history provider uses its readable text instead of replaying unmatched native tool calls/results. Complete exchanges require each call to have exactly one matching result in the immediately following tool messages. Custom output filters must preserve that pairing. Structured history lasts only as long as the underlying session events; a server-generated summary cannot restore compacted tool payloads. Unknown or malformed structured metadata also falls back to event text.
+
 == Create and correct long-term memories directly
 
 For server-side type registration and structured filtering, see xref:custom-memory-types.adoc[custom memory types and attribute search].

@@ -1,12 +1,29 @@
 // Copyright (c) Redis, Inc.
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.AI;
 using Redis.Iris.AgentMemory;
 
 namespace Redis.Iris.AgentFramework.Tests;
 
 public sealed class RedisIrisServiceCollectionExtensionsTests
 {
+    [Fact]
+    public void RegistrationConfiguresToolMessageMapping()
+    {
+        var services = new ServiceCollection();
+        services.AddRedisIrisAgentMemory(options =>
+        {
+            Valid(options, true);
+            options.MessageMapping.StoreToolMessages = true;
+        });
+        using var provider = services.BuildServiceProvider();
+        var mapper = provider.GetRequiredService<RedisIrisMessageMapper>();
+        var request = mapper.ToSessionEventRequest(new(ChatRole.Tool, [new FunctionResultContent("call", "value")]),
+            "session", "owner", "agent");
+        Assert.NotNull(request?.Metadata);
+    }
+
     [Theory]
     [InlineData(true, RedisIrisEventWriter.ChatHistoryProvider)]
     [InlineData(false, RedisIrisEventWriter.MemoryProvider)]

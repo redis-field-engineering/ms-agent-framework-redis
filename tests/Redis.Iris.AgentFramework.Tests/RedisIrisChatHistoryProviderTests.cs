@@ -45,6 +45,81 @@ public sealed class RedisIrisChatHistoryProviderTests
         Assert.Equal(["new", "answer"], client.Added.Select(static request => request.Content.Single().Text));
     }
 
+    [Theory]
+    [InlineData(null, false, true)]
+    [InlineData(3, false, true)]
+    [InlineData(2, false, false)]
+    [InlineData(null, true, false)]
+    public async Task ToolHistoryRoundTripsAndIncompleteExchangesUseText(int? limit, bool missingResult, bool expectNative)
+    {
+        var client = new RecordingClient();
+        var mapper = new RedisIrisMessageMapper(new() { StoreToolMessages = true });
+        var provider = new RedisIrisChatHistoryProvider(client, _ => new("session-a", "owner-a", "agent-a"),
+            mapper, new() { MaxMessagesToRetrieve = limit });
+        List<ChatMessage> response =
+        [
+            new(ChatRole.Assistant,
+            [
+                new TextContent("Checking."),
+                new FunctionCallContent("call-1", "lookup", new Dictionary<string, object?> { ["id"] = 1 }),
+                new FunctionCallContent("call-2", "lookup", new Dictionary<string, object?> { ["id"] = 2 }),
+            ]),
+            new(ChatRole.Tool, missingResult
+                ? [new FunctionResultContent("call-1", "first")]
+                : [new FunctionResultContent("call-2", new { value = "second" }), new FunctionResultContent("call-1", "first")]),
+            new(ChatRole.Assistant, "Done."),
+        ];
+        await provider.InvokedAsync(new(s_agent, null, [new(ChatRole.User, "Look up both.")], response));
+        Assert.Equal(4, client.Added.Count);
+        client.Memory = new("session-a", "owner-a", client.Added.Select((request, index) =>
+            new SessionEvent(index.ToString(), request.ActorId, request.SessionId!, request.Role, request.Content,
+                request.CreatedAt, DateTimeOffset.UtcNow.AddSeconds(index), request.Metadata)).ToList());
+
+        // Load through a new provider, as on a resumed conversation.
+        var reader = new RedisIrisChatHistoryProvider(client, _ => new("session-a", "owner-a", "agent-a"),
+            mapper, new() { MaxMessagesToRetrieve = limit });
+        var restored = (await reader.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "Next question.")]))).ToList();
+        Assert.Equal((limit ?? 4) + 1, restored.Count);
+        Assert.Equal("Next question.", restored[^1].Text);
+        if (expectNative)
+        {
+            Assert.Equal(2, restored[^4].Contents.OfType<FunctionCallContent>().Count());
+            Assert.Equal(ChatRole.Tool, restored[^3].Role);
+            Assert.Equal(["call-2", "call-1"], restored[^3].Contents.OfType<FunctionResultContent>().Select(part => part.CallId));
+        }
+        else
+        {
+            Assert.All(restored.SelectMany(message => message.Contents), content => Assert.IsType<TextContent>(content));
+            Assert.Contains("Tool result", restored[^3].Text);
+        }
+    }
+
+    [Theory]
+    [InlineData("wrong")]
+    [InlineData("duplicate")]
+    [InlineData("interrupted")]
+    public async Task InvalidToolExchangesRemainReadableText(string scenario)
+    {
+        var mapper = new RedisIrisMessageMapper(new() { StoreToolMessages = true });
+        List<ChatMessage> messages =
+        [
+            new(ChatRole.Assistant, [new FunctionCallContent("call", "lookup", null)]),
+            new(ChatRole.Tool, [new FunctionResultContent(scenario == "wrong" ? "other" : "call", "value")]),
+        ];
+        if (scenario == "duplicate") messages.Add(new(ChatRole.Tool, [new FunctionResultContent("call", "again")]));
+        if (scenario == "interrupted") messages.Insert(1, new(ChatRole.User, "interruption"));
+        var events = messages.Select((message, index) =>
+        {
+            var request = mapper.ToSessionEventRequest(message, "session-a", "owner-a", "agent-a")!;
+            return new SessionEvent(index.ToString(), request.ActorId, "session-a", request.Role, request.Content,
+                request.CreatedAt, request.CreatedAt, request.Metadata);
+        }).ToList();
+        var client = new RecordingClient { Memory = new("session-a", "owner-a", events) };
+        var provider = new RedisIrisChatHistoryProvider(client, _ => new("session-a", "owner-a", "agent-a"), mapper);
+        var result = await provider.InvokingAsync(new(s_agent, null, []));
+        Assert.All(result.SelectMany(message => message.Contents), content => Assert.IsType<TextContent>(content));
+    }
+
     [Fact]
     public async Task InvokingAsyncRejectsAStoredSessionOwnedBySomeoneElse()
     {
