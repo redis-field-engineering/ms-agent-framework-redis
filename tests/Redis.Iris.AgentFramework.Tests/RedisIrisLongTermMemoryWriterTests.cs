@@ -9,6 +9,32 @@ namespace Redis.Iris.AgentFramework.Tests;
 public sealed class RedisIrisLongTermMemoryWriterTests
 {
     [Fact]
+    public async Task AttributeCorrectionSearchRetainsIdentityAndRejectsForeignResults()
+    {
+        var client = new MemoryClient();
+        var writer = new RedisIrisLongTermMemoryWriter(client, Options());
+        var options = new RedisIrisMemoryCorrectionSearchOptions
+        {
+            MemoryType = new() { Eq = "trip" },
+            Attributes = new Dictionary<string, AttributeFilterClause> { ["city"] = AttributeFilterClause.StringEquals("Tokyo") },
+            PageToken = "next",
+            Limit = 3,
+        };
+        await writer.SearchWithOptionsAsync(options);
+        var request = client.SearchRequest!;
+        Assert.Equal("owner", request.Filter!.OwnerId!.Eq);
+        Assert.Equal(["required"], request.Filter.Topics!.All);
+        Assert.Equal("all", request.FilterOp);
+        Assert.Equal("trip", request.Filter.MemoryType!.Eq);
+        Assert.Same(options.Attributes, request.Filter.Attributes);
+        Assert.Equal(3, request.Limit);
+        Assert.Equal("next", request.PageToken);
+        client.Record = client.Record with { OwnerId = "another-owner" };
+        var error = await Assert.ThrowsAsync<AgentMemoryException>(() => writer.SearchWithOptionsAsync(options));
+        Assert.Equal(HttpStatusCode.NotFound, error.StatusCode);
+    }
+
+    [Fact]
     public async Task WritesDenyByDefaultAndContentPolicyRunsBeforeDispatch()
     {
         var client = new MemoryClient(); var options = Options(); options.MemoryWrites.AuthorizeWriteAsync = null;
@@ -199,7 +225,9 @@ public sealed class RedisIrisLongTermMemoryWriterTests
             if (FailReadAfterWrite && Writes > 0) throw new HttpRequestException();
             return Task.FromResult(Record);
         }
-        public Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default) => Task.FromResult(new LongTermMemorySearchResult([Record]));
+        public LongTermMemorySearchRequest? SearchRequest { get; private set; }
+        public Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default)
+        { SearchRequest = request; return Task.FromResult(new LongTermMemorySearchResult([Record])); }
         public Task<BulkCreateLongTermMemoriesResult> BulkCreateLongTermMemoriesAsync(BulkCreateLongTermMemoriesRequest request, CancellationToken cancellationToken = default)
         {
             CreateRequest = request; Writes++;

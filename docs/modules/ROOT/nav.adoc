@@ -5,6 +5,7 @@
 ** xref:samples.adoc[Samples and notebooks]
 * Agent Memory
 ** xref:agent-memory.adoc[Session and long-term memory]
+** xref:custom-memory-types.adoc[Custom types and attribute search]
 ** xref:agent-framework.adoc[Agent Framework providers]
 * Context Retriever
 ** xref:context-retriever.adoc[Tools and authorization]

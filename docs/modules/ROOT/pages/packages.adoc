@@ -1,6 +1,6 @@
 = Packages and compatibility
 
-All five packages share preview version `{preview-version}`, declared in {source-url}/src/Directory.Build.props[`src/Directory.Build.props`].
+All six packages share preview version `{preview-version}`, declared in {source-url}/src/Directory.Build.props[`src/Directory.Build.props`].
 Preview APIs may change before a stable release.
 
 [cols="2,3",options="header"]
@@ -11,6 +11,7 @@ Preview APIs may change before a stable release.
 |`Redis.Iris.ContextRetriever` |Authorized MCP tool discovery and invocation, typed reads, and connection caching.
 |`Redis.Iris.ContextRetriever.Modeling` |Compile POCO attributes or fluent configuration into a DataModel and compare model changes.
 |`Redis.Iris.ContextRetriever.Management` |Optional administrative HTTP client for creating, reading, and updating surfaces. Add it explicitly in deployment tooling.
+|`Redis.Iris.AgentMemory.Management` |Optional Iris control-plane v2 client for registering custom memory types and updating extraction strategies. Add it explicitly in deployment tooling.
 |===
 
 == Supported baselines

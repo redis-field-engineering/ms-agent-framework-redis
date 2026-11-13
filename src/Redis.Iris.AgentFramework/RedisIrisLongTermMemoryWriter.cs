@@ -8,6 +8,19 @@ using Redis.Iris.AgentMemory;
 
 namespace Redis.Iris.AgentFramework;
 
+/// <summary>Additional constraints for correction searches; identity scope is supplied by the trusted host.</summary>
+public sealed record RedisIrisMemoryCorrectionSearchOptions
+{
+    /// <summary>Gets a memory-type constraint.</summary>
+    public StringFilter? MemoryType { get; init; }
+    /// <summary>Gets custom-attribute constraints. Requires Iris API mode.</summary>
+    public IReadOnlyDictionary<string, AttributeFilterClause>? Attributes { get; init; }
+    /// <summary>Gets the result limit, between 1 and 100.</summary>
+    public int Limit { get; init; } = 20;
+    /// <summary>Gets the continuation token for the same query and constraints.</summary>
+    public string? PageToken { get; init; }
+}
+
 /// <summary>The kind of an explicitly authorized direct memory write.</summary>
 public enum RedisIrisMemoryWriteKind
 {
@@ -99,21 +112,31 @@ public sealed class RedisIrisLongTermMemoryWriter
     }
 
     /// <summary>Searches within the writer's exact owner, namespace, and required topic scope.</summary>
-    public async Task<LongTermMemorySearchResult> SearchAsync(string? query = null, string? pageToken = null,
+    public Task<LongTermMemorySearchResult> SearchAsync(string? query = null, string? pageToken = null,
+        AgentSession? session = null, CancellationToken cancellationToken = default) =>
+        SearchWithOptionsAsync(new() { PageToken = pageToken }, query, session, cancellationToken);
+
+    /// <summary>Searches with type and attribute constraints while retaining exact identity scope and result authorization.</summary>
+    public async Task<LongTermMemorySearchResult> SearchWithOptionsAsync(RedisIrisMemoryCorrectionSearchOptions options, string? query = null,
         AgentSession? session = null, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.Limit is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(options), "Limit must be between 1 and 100.");
         var identity = Current(session);
         var result = await _client.SearchLongTermMemoryAsync(new()
         {
             Text = query,
-            PageToken = pageToken,
-            Limit = 20,
+            PageToken = options.PageToken,
+            Limit = options.Limit,
+            FilterOp = "all",
             Filter = new()
             {
                 OwnerId = new() { Eq = identity.OwnerId },
                 NamespaceRef = identity.NamespaceId is null ? null : new() { Eq = identity.NamespaceId },
                 Unnamespaced = identity.NamespaceId is null ? true : null,
                 Topics = identity.Topics is { Count: > 0 } ? new() { All = identity.Topics } : null,
+                MemoryType = options.MemoryType,
+                Attributes = options.Attributes,
             },
         }, cancellationToken).ConfigureAwait(false);
         foreach (var record in result.Items) CheckRecord(identity, record);

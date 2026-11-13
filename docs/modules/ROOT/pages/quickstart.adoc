@@ -17,7 +17,7 @@ cd IrisDemo
 dotnet add package Redis.Iris.AgentFramework --version 0.1.0-preview.1
 ----
 
-Until publication, build the five packages with `./eng/pack.sh` from a source checkout and add the resulting `artifacts/packages` directory as a NuGet source. Keep NuGet.org enabled for external dependencies. The adapter brings in the Agent Memory, Context Retriever, and modeling packages transitively. Surface administration requires explicitly adding the optional `Redis.Iris.ContextRetriever.Management` package. Applications using only the Agent Memory REST client can install `Redis.Iris.AgentMemory` instead.
+Until publication, build the six packages with `./eng/pack.sh` from a source checkout and add the resulting `artifacts/packages` directory as a NuGet source. Keep NuGet.org enabled for external dependencies. The adapter brings in the Agent Memory, Context Retriever, and modeling packages transitively. Surface administration requires explicitly adding the optional `Redis.Iris.ContextRetriever.Management` package. Applications using only the Agent Memory REST client can install `Redis.Iris.AgentMemory` instead.
 
 If you used the earlier source preview named `Microsoft.Agents.AI.Redis.Iris`, change the package/project reference and `using` directives to `Redis.Iris.AgentFramework`. The assembly is now `Redis.Iris.AgentFramework.dll`; rebuild your application and restart notebook kernels before loading it. Provider class names and behavior are unchanged. No compatibility assembly is supplied for the old name.
 

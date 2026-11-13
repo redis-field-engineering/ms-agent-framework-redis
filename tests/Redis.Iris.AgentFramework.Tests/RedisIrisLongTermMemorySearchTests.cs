@@ -18,7 +18,8 @@ public sealed class RedisIrisLongTermMemorySearchTests
         {
             NamespaceRef = new() { Eq = "namespace-a" },
             Topics = new() { All = ["preferences"] },
-            MemoryType = new() { Eq = "semantic" },
+            MemoryType = new() { Eq = "trip" },
+            Attributes = new Dictionary<string, AttributeFilterClause> { ["city"] = AttributeFilterClause.StringEquals("Tokyo") },
             CreatedAt = new() { Gte = DateTimeOffset.Parse("2026-01-01T00:00:00Z") },
             SimilarityThreshold = 0.75,
             Limit = 4,
@@ -29,6 +30,8 @@ public sealed class RedisIrisLongTermMemorySearchTests
         Assert.Equal("owner-a", request.Filter!.OwnerId!.Eq);
         Assert.Equal("namespace-a", request.Filter.NamespaceRef!.Eq);
         Assert.Equal("all", request.FilterOp);
+        Assert.Equal("trip", request.Filter.MemoryType!.Eq);
+        Assert.Equal("{\"string\":\"Tokyo\"}", System.Text.Json.JsonSerializer.Serialize(request.Filter.Attributes!["city"]));
         Assert.Equal(4, request.Limit);
         Assert.Equal("next", request.PageToken);
     }

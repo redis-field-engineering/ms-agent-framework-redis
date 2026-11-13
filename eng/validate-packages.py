@@ -7,6 +7,7 @@ from zipfile import ZipFile
 
 EXPECTED = {
     "Redis.Iris.AgentMemory",
+    "Redis.Iris.AgentMemory.Management",
     "Redis.Iris.ContextRetriever.Modeling",
     "Redis.Iris.ContextRetriever.Management",
     "Redis.Iris.ContextRetriever",
@@ -45,7 +46,7 @@ def validate(directory):
     version = versions.pop()
     for package_id, (_, dependencies) in packages.items():
         for dependency_id, required in dependencies:
-            if dependency_id == "Redis.Iris.ContextRetriever.Management":
+            if dependency_id in {"Redis.Iris.ContextRetriever.Management", "Redis.Iris.AgentMemory.Management"}:
                 raise ValueError(f"Management must remain optional: {package_id}")
             if dependency_id in EXPECTED and required not in (version, f"[{version}]", f"[{version}, )"):
                 raise ValueError(f"Dependency version mismatch: {package_id} -> {dependency_id} {required}")

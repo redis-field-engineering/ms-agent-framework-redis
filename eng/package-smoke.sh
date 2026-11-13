@@ -39,12 +39,12 @@ import sys
 from pathlib import Path
 root = Path(sys.argv[1])
 assets = json.loads((root / 'obj/project.assets.json').read_text())
-assert not any(name.startswith('Redis.Iris.ContextRetriever.Management/') for name in assets['libraries'])
+assert not any(name.startswith(('Redis.Iris.ContextRetriever.Management/', 'Redis.Iris.AgentMemory.Management/')) for name in assets['libraries'])
 project = root / 'Consumer.csproj'
 project.write_text(project.read_text().replace('</ItemGroup>',
-    f'<PackageReference Include="Redis.Iris.ContextRetriever.Management" Version="[{sys.argv[2]}]" /></ItemGroup>'))
+    f'<PackageReference Include="Redis.Iris.ContextRetriever.Management" Version="[{sys.argv[2]}]" /><PackageReference Include="Redis.Iris.AgentMemory.Management" Version="[{sys.argv[2]}]" /></ItemGroup>'))
 with (root / 'Program.cs').open('a') as output:
-    output.write('\nConsole.WriteLine(typeof(Redis.Iris.ContextRetriever.Management.ContextRetrieverManagementClient).FullName);\n')
+    output.write('\nConsole.WriteLine(typeof(Redis.Iris.ContextRetriever.Management.ContextRetrieverManagementClient).FullName);\nConsole.WriteLine(typeof(Redis.Iris.AgentMemory.Management.AgentMemoryManagementClient).FullName);\n')
 PY
 dotnet restore "$smoke_dir/Consumer.csproj" --configfile "$smoke_dir/NuGet.Config" --packages "$smoke_dir/packages"
 dotnet run --project "$smoke_dir/Consumer.csproj" -c Release --no-restore
