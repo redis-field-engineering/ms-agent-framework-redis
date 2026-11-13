@@ -6,7 +6,7 @@ nav:
   - modules/ROOT/nav.adoc
 asciidoc:
   attributes:
-    preview-version: 0.1.0-preview.1
+    preview-version: 0.1.1-preview
     repo-url: https://github.com/redis-field-engineering/ms-agent-framework-redis
     repo-branch: main
     source-url: '{repo-url}/blob/{repo-branch}'

@@ -38,7 +38,7 @@ def describe(directory, commit):
         raise ValueError("Expected a full Git commit ID")
     directory = Path(directory)
     version = validator.validate(directory)
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+", version):
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-preview(?:\.[0-9]+)?", version):
         raise ValueError("Expected a preview package version")
     packages = []
     for package_id in ORDER:
