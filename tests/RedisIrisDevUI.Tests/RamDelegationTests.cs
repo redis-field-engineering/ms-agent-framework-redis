@@ -89,6 +89,25 @@ public sealed class RamDelegationTests
     }
 
     [Fact]
+    public void RamIdentitySurvivesSerializationAndStillChecksCurrentCaller()
+    {
+        var context = new DefaultHttpContext { User = Principal("user-1") };
+        var users = new TravelUserAccessor(new HttpContextAccessor { HttpContext = context },
+            TravelUserDirectory.Parse(null), User("legacy"), TravelAuthenticationMode.OpenIdConnect, true);
+        var session = new Session();
+        var original = new RamIdentityResolver(users).Resolve(session);
+        var state = session.StateBag.Serialize();
+        var restored = new RestoredSession(AgentSessionStateBag.Deserialize(state));
+        var resolver = new RamIdentityResolver(users);
+
+        Assert.Equal(original, resolver.Resolve(restored));
+        context.User = Principal("user-2");
+        Assert.Throws<UnauthorizedAccessException>(() => resolver.Resolve(restored));
+    }
+
+    private sealed class RestoredSession(AgentSessionStateBag state) : AgentSession(state);
+
+    [Fact]
     public async Task MissingRequestContextCannotDelegate()
     {
         var users = new TravelUserAccessor(new HttpContextAccessor(), TravelUserDirectory.Parse(null),

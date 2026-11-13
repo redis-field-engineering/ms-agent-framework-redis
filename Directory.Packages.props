@@ -4,6 +4,7 @@
     <AgentFrameworkVersion Condition="'$(AgentFrameworkVersion)' == ''">1.19.0</AgentFrameworkVersion>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="StackExchange.Redis" Version="2.12.14" />
     <PackageVersion Include="Microsoft.Agents.AI" Version="$(AgentFrameworkVersion)" />
     <PackageVersion Include="Microsoft.Agents.AI.DevUI" Version="1.19.0-preview.260822.1" />
     <PackageVersion Include="Microsoft.Agents.AI.Hosting" Version="1.19.0-preview.260822.1" />

@@ -9,6 +9,7 @@ namespace RedisIrisDevUI;
 internal sealed class SampleOptions
 {
     public string Endpoint { get; }
+    public string? SessionRedisConnection { get; }
     public AgentMemoryApiMode ApiMode { get; }
     public string StoreId { get; }
     public string IrisApiKey { get; }
@@ -30,6 +31,9 @@ internal sealed class SampleOptions
 
     public SampleOptions(IConfiguration configuration)
     {
+        SessionRedisConnection = configuration["REDIS_SESSION_CONNECTION_STRING"];
+        if (SessionRedisConnection is not null && string.IsNullOrWhiteSpace(SessionRedisConnection))
+            throw new InvalidOperationException("REDIS_SESSION_CONNECTION_STRING must not be empty when configured.");
         Endpoint = Required(configuration, "REDIS_IRIS_ENDPOINT");
         var apiMode = configuration["REDIS_IRIS_API_MODE"] ?? "Legacy";
         ApiMode = Enum.TryParse<AgentMemoryApiMode>(apiMode, ignoreCase: true, out var parsedMode) && Enum.IsDefined(parsedMode)

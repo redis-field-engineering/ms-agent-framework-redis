@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Redis-backed session persistence for Microsoft Agent Framework hosting.</Description>
+    <PackageId>Redis.AgentFramework.SessionStore</PackageId>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+</Project>

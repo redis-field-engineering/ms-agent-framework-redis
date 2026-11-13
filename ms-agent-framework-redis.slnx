@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Redis.AgentFramework.SessionStore/Redis.AgentFramework.SessionStore.csproj" />
     <Project Path="src/Redis.Iris.AgentMemory.Management/Redis.Iris.AgentMemory.Management.csproj" />
     <Project Path="src/Redis.Iris.ContextRetriever.Management/Redis.Iris.ContextRetriever.Management.csproj" />
     <Project Path="src/Redis.Iris.ContextRetriever.Modeling/Redis.Iris.ContextRetriever.Modeling.csproj" />
@@ -8,6 +9,7 @@
     <Project Path="src/Redis.Iris.AgentFramework/Redis.Iris.AgentFramework.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Redis.AgentFramework.SessionStore.Tests/Redis.AgentFramework.SessionStore.Tests.csproj" />
     <Project Path="tests/Redis.Iris.AgentMemory.Management.Tests/Redis.Iris.AgentMemory.Management.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.Management.Tests/Redis.Iris.ContextRetriever.Management.Tests.csproj" />
     <Project Path="tests/Redis.Iris.ContextRetriever.Modeling.Tests/Redis.Iris.ContextRetriever.Modeling.Tests.csproj" />

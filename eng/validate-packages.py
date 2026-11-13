@@ -6,6 +6,7 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 EXPECTED = {
+    "Redis.AgentFramework.SessionStore",
     "Redis.Iris.AgentMemory",
     "Redis.Iris.AgentMemory.Management",
     "Redis.Iris.ContextRetriever.Modeling",
