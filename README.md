@@ -6,6 +6,8 @@ Use `Redis.Iris.AgentFramework` for the Microsoft Agent Framework integration. I
 
 Custom memory attribute filters are available in Iris mode through the SDK and owner-scoped agent recall. Add `Redis.Iris.AgentMemory.Management` separately to register server-side types through the Iris control-plane v2 API. See [the guide](docs/modules/ROOT/pages/custom-memory-types.adoc) and [runnable example](samples/RedisIrisCustomMemory).
 
+Add `Redis.AgentFramework.SessionStore` separately for a Redis-backed `AgentSessionStore`. It persists serialized framework state by continuation ID (including an A2A context ID) and works alongside RAM history and recall. It uses a direct Redis connection, and does not add a Redis dependency to the RAM client. See [session persistence](docs/modules/ROOT/pages/redis-session-store.adoc).
+
 Start with the [documentation site](https://redis-field-engineering.github.io/ms-agent-framework-redis/) or read the [standalone .NET quickstart source](docs/modules/ROOT/pages/quickstart.adoc).
 
 To build or contribute to the Antora site, see the [documentation contributor guide](docs/README.md).
@@ -81,7 +83,7 @@ The libraries target `net8.0` and can be consumed by .NET 10 applications. The b
 
 ## License and package version
 
-This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All six packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
+This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All seven packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
 
 ### Direct long-term memory writes
 

@@ -1,0 +1,83 @@
+= Redis-backed Agent Framework sessions
+
+`Redis.AgentFramework.SessionStore` stores serialized `AgentSession` snapshots directly in Redis using StackExchange.Redis. It is an optional package, independent of the Redis Agent Memory HTTP client. Use it alongside RAM history and recall providers to restore framework state after a process restart or on another host instance.
+
+The snapshot includes state the agent serializes: RAM provider IDs and scope, framework pending approvals, and other session-backed state. Conversation events and long-term memories remain in RAM. Application state outside `AgentSession` needs separate persistence; this includes the DevUI sample's custom memory-edit proposal queue.
+
+== Configure a hosted agent
+
+Register one shared connection multiplexer and use `WithRedisSessionStore`:
+
+[source,csharp]
+----
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using Redis.AgentFramework.SessionStore;
+using StackExchange.Redis;
+
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(redisConnectionString));
+
+builder.AddAIAgent("travel-agent", (services, name) =>
+    services.GetRequiredService<IChatClient>().AsAIAgent(new ChatClientAgentOptions
+    {
+        Id = name, // Keep stable across restarts and replicas.
+        Name = name,
+        // Configure your RAM history and context providers here.
+    }))
+    .WithRedisSessionStore(options =>
+    {
+        options.KeyPrefix = "travel-app:sessions:";
+        options.Expiry = TimeSpan.FromDays(7);
+    });
+----
+
+Register an `AgentIsolationKeyProvider` that resolves the authenticated tenant/user boundary. `WithRedisSessionStore` preserves the framework's default isolation decorator. Disable it with `withIsolation: false` only for a trusted single-user application. The continuation ID alone does not authorize access.
+
+Keep agent configuration and serialization compatible when restoring snapshots. Keys hash the stable `agent.Id` and opaque, potentially isolation-scoped continuation ID. Different agents, callers, and application prefixes use separate records; raw user and conversation IDs are not included in Redis keys.
+
+== Restore from an A2A context ID
+
+An A2A host that uses `AgentSessionStore` can supply its context ID as the continuation key. Attach this store to that hosted agent; the server restores its local agent session, not a client-side `A2AAgentSession`.
+
+For direct integration, use an authorized, caller-scoped key consistently:
+
+[source,csharp]
+----
+var store = new RedisAgentSessionStore(connection.GetDatabase());
+var session = await store.GetSessionAsync(agent, authorizedContextKey, cancellationToken);
+var response = await agent.RunAsync(message, session, cancellationToken: cancellationToken);
+await store.SaveSessionAsync(agent, authorizedContextKey, session, cancellationToken);
+----
+
+Direct construction does not add caller isolation; wrap it in `IsolationKeyScopedAgentSessionStore` or scope the key in trusted application code. On a miss, the store asks the agent to create a new session. On a hit, it calls the owning agent's `DeserializeSessionAsync`, returning an independent session instance on each read.
+
+The RAM identity resolver must reuse the restored RAM session ID while revalidating the current caller. Generating a new RAM ID for every reconstructed `AgentSession` would disconnect it from its history. The DevUI sample persists its resolved identity in the session state bag for this reason.
+
+== Retention and concurrency
+
+* Each save uses one atomic Redis `SET`. Optional expiration is applied with that write and refreshed on subsequent saves, not reads. The default is no expiration; explicit deletion removes the snapshot only.
+* Deleting the snapshot does not delete RAM history or long-term memories. Align expiration and deletion with RAM retention policy.
+* Concurrent saves to the same key are last-writer-wins. The store does not provide a distributed execution lock or optimistic revision checking. Serialize runs for the same conversation when concurrent updates must not overwrite one another.
+* Checkpoint writes are not atomic with RAM event writes or external tool effects. Session persistence is not an exactly-once execution guarantee.
+* Redis errors and invalid serialized data fail the operation instead of silently starting a new conversation. Cancellation stops waiting; an already dispatched Redis write may still complete.
+* Use TLS and application-scoped Redis credentials in production. The store requires `GET`, `SET`, and `DEL` on its key prefix, in addition to connection handshake commands. The application owns and disposes the shared multiplexer. Redis durability and eviction configuration determine whether snapshots survive Redis failures or memory pressure.
+
+== DevUI sample
+
+Set `REDIS_SESSION_CONNECTION_STRING` to enable Redis storage. Without it, the sample uses the in-memory store. Redis storage uses the `redis-iris-devui:sessions:` prefix, no expiration by default, and the existing caller isolation configuration.
+
+The sample exposes OpenAI-compatible endpoints, not A2A. Enabling Redis persists framework sessions; it does not add an A2A endpoint or persist every other hosting resource.
+
+== Validation
+
+Unit tests use the real Agent Framework serializer with a Redis command double. Set `REDIS_SESSION_STORE_TEST_CONNECTION` to a test Redis endpoint to enable the Redis integration test:
+
+[source,shell]
+----
+dotnet test tests/Redis.AgentFramework.SessionStore.Tests
+----
+
+The integration test uses unique keys and removes its snapshots afterward. CI runs it against a Redis service.

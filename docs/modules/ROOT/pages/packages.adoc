@@ -1,11 +1,12 @@
 = Packages and compatibility
 
-All six packages share preview version `{preview-version}`, declared in {source-url}/src/Directory.Build.props[`src/Directory.Build.props`].
+All seven packages share preview version `{preview-version}`, declared in {source-url}/src/Directory.Build.props[`src/Directory.Build.props`].
 Preview APIs may change before a stable release.
 
 [cols="2,3",options="header"]
 |===
 |Package |Purpose
+|`Redis.AgentFramework.SessionStore` |Optional direct Redis session store for serialized framework state, separate from RAM history and recall.
 |`Redis.Iris.AgentFramework` |Microsoft Agent Framework history, recall, and Context Retriever providers; depends on the next three packages.
 |`Redis.Iris.AgentMemory` |Standalone HTTP client for session events, summaries, filtered memory search, and scoped deletion.
 |`Redis.Iris.ContextRetriever` |Authorized MCP tool discovery and invocation, typed reads, and connection caching.

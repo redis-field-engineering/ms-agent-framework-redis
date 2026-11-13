@@ -14,7 +14,7 @@ from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
 ORDER = ["Redis.Iris.AgentMemory", "Redis.Iris.AgentMemory.Management", "Redis.Iris.ContextRetriever.Modeling", "Redis.Iris.ContextRetriever.Management",
-         "Redis.Iris.ContextRetriever", "Redis.Iris.AgentFramework"]
+         "Redis.Iris.ContextRetriever", "Redis.Iris.AgentFramework", "Redis.AgentFramework.SessionStore"]
 MANIFEST = "release-manifest.json"
 spec = importlib.util.spec_from_file_location("package_validator", Path(__file__).with_name("validate-packages.py"))
 validator = importlib.util.module_from_spec(spec)

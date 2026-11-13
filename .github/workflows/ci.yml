@@ -11,6 +11,14 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7.4
+        ports:
+          - 6379:6379
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      REDIS_SESSION_STORE_TEST_CONNECTION: localhost:6379
     steps:
       - uses: actions/checkout@v4
       - name: Reject saved notebook output

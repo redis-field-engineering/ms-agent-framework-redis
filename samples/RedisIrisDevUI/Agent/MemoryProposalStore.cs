@@ -5,7 +5,8 @@ using Redis.Iris.AgentFramework;
 
 namespace RedisIrisDevUI;
 
-// Development sample only: proposals expire and are lost on restart, like the in-memory agent sessions.
+// Development sample only: these application-level proposals are outside AgentSession and are lost on restart,
+// even when the optional Redis session store is enabled.
 internal sealed class MemoryProposalStore
 {
     private readonly object _gate = new();

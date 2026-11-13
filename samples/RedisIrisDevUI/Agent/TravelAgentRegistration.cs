@@ -4,9 +4,11 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using Redis.AgentFramework.SessionStore;
 using Redis.Iris.AgentFramework;
 using Redis.Iris.AgentMemory;
 using Redis.Iris.ContextRetriever;
+using StackExchange.Redis;
 
 namespace RedisIrisDevUI;
 
@@ -75,9 +77,10 @@ internal static class TravelAgentRegistration
             });
         });
 
-        builder.AddAIAgent(AgentName, (services, name) =>
+        var hostedAgent = builder.AddAIAgent(AgentName, (services, name) =>
             services.GetRequiredService<IChatClient>().AsAIAgent(new ChatClientAgentOptions
             {
+                Id = name,
                 Name = name,
                 Description = "A travel assistant with Redis Agent Memory and Redis Context Retriever.",
                 ChatOptions = new()
@@ -101,7 +104,17 @@ internal static class TravelAgentRegistration
             })
             .AsBuilder()
             .UseOpenTelemetry(TelemetrySourceName)
-            .Build(services))
-            .WithInMemorySessionStore(withIsolation: settings.AuthenticationRequired);
+            .Build(services));
+
+        if (settings.SessionRedisConnection is { } connectionString)
+        {
+            builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionString));
+            hostedAgent.WithRedisSessionStore(options => options.KeyPrefix = "redis-iris-devui:sessions:",
+                withIsolation: settings.AuthenticationRequired);
+        }
+        else
+        {
+            hostedAgent.WithInMemorySessionStore(withIsolation: settings.AuthenticationRequired);
+        }
     }
 }
