@@ -34,10 +34,11 @@ class PackageValidationTests(unittest.TestCase):
                     validator.validate(directory)
 
     def test_management_cannot_be_a_transitive_dependency(self):
-        with tempfile.TemporaryDirectory() as directory:
-            self.create(directory, dependency_id="Redis.Iris.ContextRetriever.Management")
-            with self.assertRaisesRegex(ValueError, "Management must remain optional"):
-                validator.validate(directory)
+        for package in ["Redis.Iris.ContextRetriever.Management", "Redis.Iris.AgentMemory.Management"]:
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as directory:
+                self.create(directory, dependency_id=package)
+                with self.assertRaisesRegex(ValueError, "Management must remain optional"):
+                    validator.validate(directory)
 
     def test_wrong_dependency_and_secret_are_rejected(self):
         for options, message in [({"dependency_version": "0.0.1"}, "Dependency version mismatch"),

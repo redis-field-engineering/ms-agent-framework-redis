@@ -2,6 +2,8 @@
 
 These Jupyter notebooks demonstrate Redis Iris Agent Memory, Context Retriever, POCO modeling, and their integration with Microsoft Agent Framework.
 
+For server-side custom memory types and attribute filtering, use the [compiled example](../../samples/RedisIrisCustomMemory) and [guide](../../docs/modules/ROOT/pages/custom-memory-types.adoc). The legacy in-memory notebook fixture deliberately rejects attribute filters; use a current Iris deployment for these operations.
+
 ## Prerequisites
 
 1. Install a Jupyter client with a C# kernel, such as the VS Code Polyglot Notebooks extension or the .NET Interactive Jupyter kernel.

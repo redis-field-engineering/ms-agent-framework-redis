@@ -68,5 +68,5 @@ An ordinary Redis server alone does not expose these APIs; service provisioning 
 See the https://redis.io/docs/latest/develop/ai/context-engine/[Redis Iris documentation] for deployment options.
 
 The packages are maintained by Redis Field Engineering and are not Microsoft products.
-All five packages share version `{preview-version}`; a version in source does not imply publication to NuGet.
+All six packages share version `{preview-version}`; a version in source does not imply publication to NuGet.
 Read xref:packages.adoc[compatibility], the xref:security.adoc[security model], and the xref:operational-contract.adoc[preview operational contract] before using customer data.

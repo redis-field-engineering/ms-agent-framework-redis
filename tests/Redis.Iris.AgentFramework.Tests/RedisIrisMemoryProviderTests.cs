@@ -13,6 +13,23 @@ public sealed class RedisIrisMemoryProviderTests
     private static readonly AIAgent s_agent = new StubAgent();
 
     [Fact]
+    public async Task AttributeRecallKeepsMandatoryOwnerNamespaceAndTopics()
+    {
+        var client = new SearchClient(new LongTermMemorySearchResult([]));
+        var attributes = new Dictionary<string, AttributeFilterClause> { ["city"] = AttributeFilterClause.StringEquals("Tokyo") };
+        var provider = new RedisIrisMemoryProvider(new(client), _ => new("session", "owner", "agent")
+        { NamespaceId = "namespace", Topics = ["required"] }, new() { Search = new() { Attributes = attributes, MemoryType = new() { Eq = "trip" } } });
+        await provider.InvokingAsync(new(s_agent, null, [new(ChatRole.User, "travel")]));
+        var request = client.LastRequest!;
+        Assert.Equal("all", request.FilterOp);
+        Assert.Equal("owner", request.Filter!.OwnerId!.Eq);
+        Assert.Equal("namespace", request.Filter.NamespaceRef!.Eq);
+        Assert.Equal(["required"], request.Filter.Topics!.All);
+        Assert.Equal("trip", request.Filter.MemoryType!.Eq);
+        Assert.Same(attributes, request.Filter.Attributes);
+    }
+
+    [Fact]
     public async Task RecallAddsOneBoundedUserMessageWithProvenance()
     {
         var client = new SearchClient(new LongTermMemorySearchResult([
@@ -85,8 +102,12 @@ public sealed class RedisIrisMemoryProviderTests
         private readonly Exception? _exception;
         public SearchClient(LongTermMemorySearchResult result) => this._result = result;
         public SearchClient(Exception exception) => this._exception = exception;
-        public Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default) =>
-            this._exception is null ? Task.FromResult(this._result!) : Task.FromException<LongTermMemorySearchResult>(this._exception);
+        public LongTermMemorySearchRequest? LastRequest { get; private set; }
+        public Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            return this._exception is null ? Task.FromResult(this._result!) : Task.FromException<LongTermMemorySearchResult>(this._exception);
+        }
         public Task<SessionEvent> AddSessionEventAsync(AddSessionEventRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<SessionMemory> GetSessionMemoryAsync(string sessionId, bool includeSummarizedEvents = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<SessionEvent> GetSessionEventAsync(string sessionId, string eventId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

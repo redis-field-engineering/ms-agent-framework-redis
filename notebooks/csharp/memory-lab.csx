@@ -106,7 +106,7 @@ public sealed class MemoryLabTransport : HttpMessageHandler
             LastSearch = query;
             var filter = query.Filter;
             if (query.FilterOp != "all" || query.PageToken is not null || filter?.Namespace is not null ||
-                filter?.NamespaceRef is not null || filter?.Unnamespaced is not null || filter?.CreatedAt is not null)
+                filter?.NamespaceRef is not null || filter?.Unnamespaced is not null || filter?.CreatedAt is not null || filter?.Attributes is not null)
                 throw new NotSupportedException("The fixture supports conjunctions of owner, session, topic and memory-type filters only, without pagination.");
             var results = Records
                 .Where(row => Matches(filter?.OwnerId, new[] { row.Memory.OwnerId! }) &&

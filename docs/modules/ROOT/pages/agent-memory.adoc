@@ -58,6 +58,8 @@ Iris does not support the deprecated namespace-label filter, or `Ne`/`All` opera
 
 == Create and correct long-term memories directly
 
+For server-side type registration and structured filtering, see xref:custom-memory-types.adoc[custom memory types and attribute search].
+
 Direct writes require `AgentMemoryApiMode.Iris` and a deployment supporting the current memory mutation contract. They do not wait for extraction. Use direct writes for an explicit user preference, an application form, or an import; retain ordinary session capture for conversation history. Direct writes do not apply extraction's sensitive-data exclusions, so apply your own content policy.
 
 [source,csharp]

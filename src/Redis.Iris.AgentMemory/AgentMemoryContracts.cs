@@ -120,6 +120,9 @@ public sealed record DateTimeFilter
 /// <summary>Filters applied by the Agent Memory service before ranking.</summary>
 public sealed record LongTermMemoryFilter
 {
+    /// <summary>Gets typed custom-attribute conditions, keyed by registered field name. Requires Iris API mode.</summary>
+    public IReadOnlyDictionary<string, AttributeFilterClause>? Attributes { get; init; }
+
     /// <summary>Gets the required or optional owner constraint.</summary>
     public StringFilter? OwnerId { get; init; }
 

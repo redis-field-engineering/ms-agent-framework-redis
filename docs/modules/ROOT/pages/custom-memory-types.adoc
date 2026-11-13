@@ -1,0 +1,117 @@
+= Custom memory types and attribute search
+
+Use server-side custom types to store domain-specific attributes and optionally extract them from sessions. The data-plane SDK already supports `MemoryType` and `Attributes` on direct creates and full replacements. Attribute search narrows those records on the server before pagination and ranking.
+
+== Filter attributes
+
+Select `AgentMemoryApiMode.Iris`. Legacy mode rejects attribute filters before sending; it never drops a condition or retries with a broader query.
+
+[source,csharp]
+----
+var attributes = new Dictionary<string, AttributeFilterClause>
+{
+    ["destinations"] = AttributeFilterClause.ContainsAll("Tokyo"),
+};
+var search = new RedisIrisLongTermMemorySearch(client);
+var result = await search.SearchAsync(authorizedOwnerId, "Travel preferences", new()
+{
+    MemoryType = new StringFilter { Eq = "trip_preference" },
+    Attributes = attributes,
+    Limit = 10,
+});
+----
+
+Pass `(string?)null` instead of query text for filter-only retrieval. Pass `NextPageToken` back through search options with the same query and filters. The raw `LongTermMemorySearchRequest.Filter.Attributes` property accepts the same map, but raw callers must supply and authorize their own owner/namespace scope.
+
+[cols="1,1,2",options="header"]
+|===
+|Factory |Wire value |Meaning
+|`StringEquals("open")` |`{"string":"open"}` |Exact string match
+|`NumberEquals(0)` |`{"number":0}` |Numeric equality; IEEE double precision, with possible integer precision loss above 2^53
+|`BooleanEquals(false)` |`{"boolean":false}` |Boolean equality, including false
+|`ContainsAll("Tokyo", "Kyoto")` |`{"list":["Tokyo","Kyoto"]}` |String-list attribute contains every supplied value
+|===
+
+Each clause has exactly one typed value. Lists are copied when a clause is created. Keys are registered field names, preserved exactly, not nested paths. Ranges, substring matches, object queries and numeric-list filters are not supported. Objects and numeric lists can still be stored as attributes. Use a nonempty list for a meaningful containment condition; empty-list behavior is left to the service. No administrative schema lookup is required for recall; the server validates field compatibility.
+
+The implementation follows the current https://redis.io/docs/latest/develop/ai/context-engine/agent-memory/api-reference/openapi-agent-memory.json[data-plane OpenAPI] and https://github.com/redis/iris-sdks/blob/5f54b64fb4c67fa01cb11ada1e80769eb53593e5/agent-memory-ts-sdk/src/models/attribute-filter-clause.ts[generated SDK contract]. Older examples using `{"string":{"eq":"open"}}` describe a different shape. This SDK sends the scalar Iris form only.
+
+=== Agent Framework integration
+
+Set `RedisIrisMemoryProviderOptions.Search.Attributes` for automatic recall. The provider retains required namespace/topic constraints; `RedisIrisLongTermMemorySearch` always adds owner equality and uses `ALL`, so matching attributes never bypass the owner condition. Recalled context continues to render memory text. Attributes remain available in search results without being automatically appended to model prompts.
+
+Use `writer.SearchWithOptionsAsync(new RedisIrisMemoryCorrectionSearchOptions { MemoryType = ..., Attributes = ... })` for correction searches. It retains the writer's exact owner, namespace and mandatory-topic scope and checks every returned record. The existing `SearchAsync` signature is unchanged. `PrepareCreate` already accepts a custom type and attributes; `PrepareUpdateAsync` uses a revision-protected replacement when attributes change. Keep the existing host approval workflow for writes.
+
+== Register server-side types
+
+Add `Redis.Iris.AgentMemory.Management` explicitly to deployment tooling. It is not a transitive dependency of runtime packages. It targets the published https://redis.io/docs/latest/operate/iris/agent-memory/self-managed/control-plane-api-reference/openapi-control-plane.json[Iris control-plane v2 contract], with bearer authentication and dedicated resources:
+
+[cols="1,2",options="header"]
+|===
+|Method |Path relative to the control-plane base URL
+|List / create |`GET` / `POST /iris/v1/agent-memory/stores/\{storeId}/memory-types`
+|Read / update strategy |`GET` / `PATCH /iris/v1/agent-memory/stores/\{storeId}/memory-types/\{name}`
+|===
+
+The service must expose these operations. A data-plane agent key is not a management token. This client does not implement the Redis Cloud account API's `/memory-stores` asynchronous task interface or older whole-store type registry updates. On Cloud deployments without access to the v2 control plane, register the same definition through the console, then use the Iris data-plane search and write APIs normally. There is no automatic endpoint discovery or fallback.
+
+[source,csharp]
+----
+using Redis.Iris.AgentMemory.Management;
+
+using var http = new HttpClient(new HttpClientHandler
+{
+    AllowAutoRedirect = false,
+    UseCookies = false,
+});
+var management = new AgentMemoryManagementClient(http,
+    new() { Endpoint = managementBaseUrl },
+    new FixedAgentMemoryManagementCredentialProvider(adminToken));
+
+var created = await management.CreateMemoryTypeAsync(storeId, new()
+{
+    Name = "trip_preference",
+    Description = "Explicit trip requirements",
+    Fields = [new("destinations", "Cities the traveler plans to visit",
+        CustomMemoryFieldType.STRING_LIST)],
+    ExtractionStrategy = new("Extract destinations only from explicit travel plans.", Enabled: false),
+});
+----
+
+The v2 wire enum is `STRING`, `INTEGER`, `FLOAT`, `BOOLEAN`, `STRING_LIST`, `FLOAT_LIST`, or `OBJECT`. These correspond to the `str`, `int`, `float`, `bool`, `list[str]`, `list[float]`, and `object` names shown in store configuration documentation. Do not send configuration names directly to this v2 API. The current schema permits a type without structured fields. Type quotas are enforced by the service, not hard-coded into the client.
+
+Names, descriptions and fields are immutable after creation. A strategy is optional, but a type created without one cannot acquire one through the update method. If extraction may be needed later, supply the intended strategy at creation and explicitly disable it. The strategy constructor defaults to enabled, matching the service; examples always specify the setting.
+
+`ListMemoryTypesAsync` returns a page ordered by name; its limit is 1–200 and `NextCursor` continues the list. `GetMemoryTypeAsync` returns the server's opaque revision. `UpdateExtractionStrategyAsync` changes only supplied prompt/enabled properties:
+
+[source,csharp]
+----
+var current = await management.GetMemoryTypeAsync(storeId, "trip_preference");
+if (string.IsNullOrEmpty(current.Revision))
+    throw new NotSupportedException("Conditional editing requires a revision.");
+var updated = await management.UpdateExtractionStrategyAsync(storeId, current.Name,
+    new() { Enabled = true }, expectedRevision: current.Revision);
+----
+
+HTTP 409 on creation means an existing or retired name; inspect it rather than treating the request as successful. HTTP 412 indicates a stale revision or concurrent registry change. Read current state and review before retrying. Omitting `expectedRevision` opts out of the client revision check. No method automatically retries writes. Cancellation or a transport failure after dispatch can leave a committed change; read the named resource to reconcile it. Dedicated operations do not replace unrelated store settings, and their current response contract has no store-update warning envelope.
+
+Extraction is asynchronous. Registration and enablement do not promise historical backfill, and custom fields do not change already stored memories. Deletion, migration, index management, full store provisioning, POCO compilation, and arbitrary schema editing are outside this package. Administrative clients must not be exposed as agent tools or registered with runtime credentials.
+
+== Run the example and live tests
+
+The {source-url}/samples/RedisIrisCustomMemory[compiled custom-memory example] supports `register`, `seed`, `recall`, `enable`, `extract`, and `disable`. Its README describes credentials, explicit extraction enablement, bounded polling and cleanup. Runtime commands do not load administrative credentials.
+
+Live tests are disabled by default. Use a dedicated store: the management suite registers one persistent `dotnet_attribute_test` definition with `status` (STRING), `priority` (FLOAT), `approved` (BOOLEAN), and `tags` (STRING_LIST), plus a disabled strategy. Subsequent runs reuse that type and update its disabled prompt to test revisions. It does not delete the definition or enable extraction.
+
+[source,bash]
+----
+# Set REDIS_IRIS_STORE_ID, REDIS_IRIS_MANAGEMENT_ENDPOINT and REDIS_IRIS_MANAGEMENT_TOKEN.
+REDIS_IRIS_RUN_MEMORY_TYPE_TESTS=1 dotnet test tests/Redis.Iris.AgentMemory.Management.Tests \
+  -f net10.0 --filter FullyQualifiedName~MemoryTypeLiveTests
+
+# Then set REDIS_IRIS_ENDPOINT and REDIS_IRIS_API_KEY for the same dedicated store.
+REDIS_IRIS_RUN_ATTRIBUTE_TESTS=1 dotnet test tests/Redis.Iris.AgentMemory.LiveTests \
+  -f net10.0 --filter FullyQualifiedName~IrisAttributeSearchLiveTests
+----
+
+Run a single target framework for live mutations to avoid simultaneous registry edits. The data-plane suite creates four synthetic records, tests all clause variants, match/nonmatch behavior, semantic/filter-only recall, pagination and cross-owner isolation, then deletes only its IDs. Run it against each target deployment before enabling this feature there. Unit/HTTP contract tests do not prove server availability or index readiness on an older store.

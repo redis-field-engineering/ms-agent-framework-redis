@@ -9,6 +9,8 @@ namespace Redis.Iris.AgentFramework;
 /// <summary>Additional server-side constraints for owner-scoped recall.</summary>
 public sealed record RedisIrisMemorySearchOptions
 {
+    /// <summary>Gets additional custom-attribute constraints. Requires Iris API mode.</summary>
+    public IReadOnlyDictionary<string, AttributeFilterClause>? Attributes { get; init; }
     /// <summary>Gets a session filter.</summary>
     public StringFilter? SessionId { get; init; }
     /// <summary>Gets a deprecated namespace-label filter.</summary>
@@ -90,6 +92,7 @@ public sealed class RedisIrisLongTermMemorySearch
                 Topics = options.Topics,
                 MemoryType = options.MemoryType,
                 CreatedAt = options.CreatedAt,
+                Attributes = options.Attributes,
             },
         }, cancellationToken);
     }

@@ -250,6 +250,10 @@ public sealed partial class RedisAgentMemoryClient : IRedisAgentMemoryClient
                 throw new ArgumentOutOfRangeException(nameof(request), "SimilarityThreshold must be between 0 and 1.");
             }
 
+            if (request.Filter?.Attributes is not null && !this._useIrisApi)
+                throw new NotSupportedException("Custom attribute search requires AgentMemoryApiMode.Iris.");
+            AttributeFilterClause.Validate(request.Filter?.Attributes);
+
             using var content = this._useIrisApi
                 ? JsonContent.Create(IrisAgentMemoryContract.SearchRequest(request), options: JsonOptions)
                 : JsonContent.Create(request, options: JsonOptions);

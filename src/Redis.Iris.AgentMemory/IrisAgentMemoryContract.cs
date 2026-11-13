@@ -55,6 +55,7 @@ internal static class IrisAgentMemoryContract
                 filter.Topics,
                 filter.MemoryType,
                 filter.CreatedAt,
+                filter.Attributes,
             },
         };
     }

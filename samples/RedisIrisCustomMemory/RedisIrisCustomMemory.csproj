@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Redis.Iris.AgentMemory.Management/Redis.Iris.AgentMemory.Management.csproj" />
+    <ProjectReference Include="../../src/Redis.Iris.AgentFramework/Redis.Iris.AgentFramework.csproj" />
+  </ItemGroup>
+</Project>

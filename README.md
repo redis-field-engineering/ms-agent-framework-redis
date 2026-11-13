@@ -4,6 +4,8 @@ Redis Field Engineering’s preview .NET connectors provide durable Agent Framew
 
 Use `Redis.Iris.AgentFramework` for the Microsoft Agent Framework integration. It brings in the `Redis.Iris.AgentMemory`, `Redis.Iris.ContextRetriever`, and `Redis.Iris.ContextRetriever.Modeling` packages; surface administration is available separately through `Redis.Iris.ContextRetriever.Management`.
 
+Custom memory attribute filters are available in Iris mode through the SDK and owner-scoped agent recall. Add `Redis.Iris.AgentMemory.Management` separately to register server-side types through the Iris control-plane v2 API. See [the guide](docs/modules/ROOT/pages/custom-memory-types.adoc) and [runnable example](samples/RedisIrisCustomMemory).
+
 Start with the [documentation site](https://redis-field-engineering.github.io/ms-agent-framework-redis/) or read the [standalone .NET quickstart source](docs/modules/ROOT/pages/quickstart.adoc).
 
 To build or contribute to the Antora site, see the [documentation contributor guide](docs/README.md).
@@ -79,7 +81,7 @@ The libraries target `net8.0` and can be consumed by .NET 10 applications. The b
 
 ## License and package version
 
-This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All five packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
+This repository is licensed under [MIT](https://github.com/redis-field-engineering/ms-agent-framework-redis/blob/main/LICENSE). All six packages use the same preview version, `0.1.0-preview.1`, declared in `src/Directory.Build.props`. Preview APIs may change before a stable release. A version in source does not mean the package has been published to NuGet.
 
 ### Direct long-term memory writes
 
