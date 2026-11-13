@@ -1,6 +1,6 @@
 = Preview operational contract
 
-This contract defines the scope of `0.1.0-preview.1`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Verify that your service deployment supports the APIs and identity mode your application uses.
+This contract defines the scope of `0.1.1-preview`. It is a preview integration, not a general-availability promise of exactly-once persistence, complete erasure, or parity with every Redis service API. Verify that your service deployment supports the APIs and identity mode your application uses.
 
 == Supported surface
 

@@ -11,12 +11,12 @@ spec.loader.exec_module(validator)
 
 
 class PackageValidationTests(unittest.TestCase):
-    def create(self, directory, missing=None, dependency_version="0.1.0-preview.1", secret=False,
+    def create(self, directory, missing=None, dependency_version="0.1.1-preview", secret=False,
                dependency_id="Redis.Iris.AgentMemory"):
         for package_id in validator.EXPECTED - {missing}:
             with ZipFile(Path(directory) / f"{package_id}.nupkg", "w") as archive:
                 archive.writestr(f"{package_id}.nuspec", f'''<package><metadata>
-<id>{package_id}</id><version>0.1.0-preview.1</version><dependencies><group>
+<id>{package_id}</id><version>0.1.1-preview</version><dependencies><group>
 <dependency id="{dependency_id}" version="{dependency_version}" />
 </group></dependencies></metadata></package>''')
                 archive.writestr(f"lib/net8.0/{package_id}.dll", b"test-secret" if secret else b"fixture")
@@ -24,7 +24,7 @@ class PackageValidationTests(unittest.TestCase):
     def test_complete_release(self):
         with tempfile.TemporaryDirectory() as directory:
             self.create(directory)
-            self.assertEqual("0.1.0-preview.1", validator.validate(directory))
+            self.assertEqual("0.1.1-preview", validator.validate(directory))
 
     def test_each_missing_package_is_rejected(self):
         for package_id in validator.EXPECTED:

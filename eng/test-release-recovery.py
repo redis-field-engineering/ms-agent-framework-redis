@@ -11,14 +11,14 @@ spec = importlib.util.spec_from_file_location("release", Path(__file__).with_nam
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 COMMIT = "a" * 40
-VERSION = "0.1.0-preview.1"
+VERSION = "0.1.1-preview"
 
 
-def package(package_id, commit=COMMIT, payload=b"synthetic"):
+def package(package_id, commit=COMMIT, payload=b"synthetic", version=VERSION):
     data = io.BytesIO()
     with ZipFile(data, "w") as archive:
         archive.writestr(f"{package_id}.nuspec", f'''<package><metadata>
-<id>{package_id}</id><version>{VERSION}</version><repository commit="{commit}" />
+<id>{package_id}</id><version>{version}</version><repository commit="{commit}" />
 </metadata></package>''')
         archive.writestr(f"lib/net8.0/{package_id}.dll", payload)
     return data.getvalue()
@@ -35,6 +35,17 @@ class RecoveryTests(unittest.TestCase):
             self.files[name] = data
             (self.directory / f"{name}.{VERSION}.nupkg").write_bytes(data)
         release.write_manifest(self.directory, COMMIT)
+
+    def test_preview_version_contract(self):
+        for version in ["0.1.1-preview", "0.1.0-preview.1", "0.1.1", "0.1.1-rc.1", "0.1.1-preview."]:
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                for name in release.ORDER:
+                    (Path(directory) / f"{name}.{version}.nupkg").write_bytes(package(name, version=version))
+                if version in {"0.1.1-preview", "0.1.0-preview.1"}:
+                    self.assertEqual(version, release.describe(directory, COMMIT)["version"])
+                else:
+                    with self.assertRaisesRegex(ValueError, "Expected a preview package version"):
+                        release.describe(directory, COMMIT)
 
     def test_partial_release_skips_only_matching_signed_content(self):
         signed = io.BytesIO(self.files[release.ORDER[0]])
