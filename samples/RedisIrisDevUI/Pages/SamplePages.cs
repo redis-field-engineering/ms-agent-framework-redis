@@ -22,7 +22,7 @@ internal static class SamplePages
             <dt><strong>RAM owner scope</strong></dt><dd><code>{{System.Net.WebUtility.HtmlEncode(user.RamOwnerId)}}</code></dd>
             <dt><strong>Short-term window</strong></dt><dd>{{shortTermWindow}} recent messages</dd>
           </dl>
-          <p><a href="/devui">Open the Agent Framework DevUI</a></p>
+          <p><a href="/devui">Open the Agent Framework DevUI</a> · <a href="/memories">Create and edit memories</a></p>
           <p>When running with Docker Compose: <a href="http://localhost:16686" target="_blank">Jaeger traces</a> · <a href="http://localhost:3000/d/redis-iris-agent-memory" target="_blank">Grafana metrics</a> · <a href="http://localhost:9090" target="_blank">Prometheus</a></p>
           <h2>Demonstration</h2>
           <ol>

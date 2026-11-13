@@ -21,7 +21,7 @@ These Jupyter notebooks demonstrate Redis Iris Agent Memory, Context Retriever, 
    dotnet build ms-agent-framework-redis.slnx --configuration Release
    ```
 
-4. For notebooks 01–08, start with a fresh `.NET (C#)` kernel whose working directory is `notebooks/csharp`. Assembly references and `#load` paths are relative to that directory. Notebook 00 has separate executable PowerShell and Bash versions. Run cells in order and dispose connections at the end, including after a failed live call. Clear outputs before committing or sharing executed notebooks.
+4. For notebooks 01–09, start with a fresh `.NET (C#)` kernel whose working directory is `notebooks/csharp`. Assembly references and `#load` paths are relative to that directory. Notebook 00 has separate executable PowerShell and Bash versions. Run cells in order and dispose connections at the end, including after a failed live call. Clear outputs before committing or sharing executed notebooks.
 
 Before committing, clear all outputs and execution counts. CI checks every tracked
 `.ipynb` without running notebook cells. Run the same check from the repository root:
@@ -77,3 +77,5 @@ Notebooks 06–08 run offline by default, using the real SDK and providers with 
 In 06, set `runLiveContextChecks = true` to read the travel fixture from notebook 00. To require delegated authorization, also set `requireDelegatedContext = true` and supply two fresh signed Context Retriever tokens through the configured users bundle. Ordinary scoped-key results do not establish delegated authorization. Configure issuer trust and access-tag claim mappings through your deployment's authentication setup before enabling delegated mode.
 
 The independent `runLiveRamChecks = true` switch requires an ownership-enforcing RAM deployment and `REDIS_IRIS_RAM_DELEGATED_USERS_FILE`. Its private JSON array has two objects with `subject`, `accessToken`, `expiresAt`, and `sessionId`; each session must already contain synthetic events belonging to that signed subject. Relative file paths resolve from the repository root. Keep tokens under ignored `secrets/`, never in cells. Both own reads must succeed before cross-user 403/404 checks. This section validates session reads, not LTM isolation or complete service authorization. Disabled live checks print `NOT RUN`.
+
+- [09 — Direct long-term memory](09-direct-long-term-memory.ipynb) — creates, recalls, and corrects a synthetic preference with stable IDs, replay keys, revision checks, and cleanup. Requires a current Iris store and connection values in the kernel environment.

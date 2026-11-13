@@ -240,3 +240,24 @@ Start each sign-in from `http://localhost:5080/login` in the browser that will c
 ### Self-managed Agent Memory routes
 
 Set `REDIS_IRIS_API_MODE=Iris` for deployments exposing `/iris/data/v1/agent-memory/stores/{storeId}`. Set `REDIS_IRIS_ENDPOINT` to the service base URL (for example, `http://localhost:9000` for a local port-forward), without the API route. HTTPS is required beyond loopback. The default, `Legacy`, preserves the original `/v1/stores` contract. Choose the mode based on the deployed API; current managed deployments may also expose the Iris contract.
+
+## Create and edit long-term memories
+
+Set `REDIS_IRIS_API_MODE=Iris` and open `/memories` from the dashboard. New memory
+and Edit use the signed-in user's scope. The editor supports text, topics, and
+registered custom-type attributes. A concurrent edit keeps your draft; choose
+**Compare with latest**, review the current record, and then save the reconciled
+change. Document-managed content is read-only. Creation and editing require a
+current Iris server; safe edits additionally require revisions.
+
+Set `REDIS_IRIS_MEMORY_TOOLS_ENABLED=true` to enable chat proposals. Ask the agent
+to remember a fact or correct a preference, then open `/memories` and select
+**Refresh proposals**. Review the exact text and select **Save proposal**. The
+agent does not save a proposal itself. Ordinary session extraction remains
+configured independently on the server.
+
+Proposals are private to the authenticated identity, expire after 15 minutes, and
+are lost on sample restart. Duplicate saves reuse the original request identity.
+If a connection fails after dispatch, retry the same proposal. Custom attribute
+edits use full replacement while retaining other reviewed fields. Credentials are
+never sent to the browser, and mutation routes require an antiforgery token.

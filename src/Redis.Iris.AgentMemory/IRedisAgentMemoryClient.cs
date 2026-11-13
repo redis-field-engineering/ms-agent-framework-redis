@@ -40,6 +40,22 @@ public interface IRedisAgentMemoryClient
     /// <summary>Searches long-term memory.</summary>
     Task<LongTermMemorySearchResult> SearchLongTermMemoryAsync(LongTermMemorySearchRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>Creates 1-100 memories using the current Iris API. Existing IDs are not overwritten.</summary>
+    Task<BulkCreateLongTermMemoriesResult> BulkCreateLongTermMemoriesAsync(BulkCreateLongTermMemoriesRequest request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    /// <summary>Reads a memory by ID using the current Iris API. The caller must authorize record access.</summary>
+    Task<LongTermMemoryRecord> GetLongTermMemoryAsync(string memoryId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    /// <summary>Partially updates a memory using the current Iris API.</summary>
+    Task<LongTermMemoryRecord> UpdateLongTermMemoryAsync(string memoryId, UpdateLongTermMemoryRequest request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    /// <summary>Creates or fully replaces a memory using the current Iris API. Omitted optional fields are cleared.</summary>
+    Task<UpsertLongTermMemoryResult> UpsertLongTermMemoryAsync(string memoryId, UpsertLongTermMemoryRequest request, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
     /// <summary>Deletes 1-100 long-term memories by ID.</summary>
     Task<BulkDeleteLongTermMemoriesResult> BulkDeleteLongTermMemoriesAsync(IReadOnlyList<string> memoryIds, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();

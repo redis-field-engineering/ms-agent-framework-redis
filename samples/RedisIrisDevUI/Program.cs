@@ -18,6 +18,7 @@ builder.Logging.AddFilter("System.Net.Http.HttpClient.Redis.Iris.AgentMemory", L
 builder.AddSampleTelemetry();
 builder.AddTravelAgent(settings);
 builder.AddTravelAuthentication(settings);
+builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddOpenAIResponses();
 builder.Services.AddOpenAIConversations();
 builder.AddDevUI(options =>
@@ -38,6 +39,7 @@ if (settings.AuthenticationRequired)
     app.UseAuthorization();
 }
 app.MapTravelAuthentication(settings);
+app.UseStaticFiles();
 app.MapDevUI();
 
 // Apply the same authorization policy to the agent APIs and every sample inspection/cleanup route.
@@ -49,6 +51,7 @@ endpoints.MapGet("/", (TravelUserAccessor users) => Results.Content(
     SamplePages.Dashboard(users.Current, settings.ShortTermWindow,
         settings.AuthenticationRequired, settings.AccessTokenInspectorEnabled), "text/html"));
 endpoints.MapRamEndpoints(settings.ShortTermWindow);
+endpoints.MapMemoryEditor(settings);
 endpoints.MapContextEndpoints();
 
 Console.WriteLine(settings.AuthenticationRequired
