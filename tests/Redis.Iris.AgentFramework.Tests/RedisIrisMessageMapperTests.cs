@@ -274,9 +274,14 @@ public sealed class RedisIrisMessageMapperTests
                 {
                     @event = new
                     {
-                        eventId = "event", actorId = "agent", sessionId = "session", role = "ASSISTANT",
-                        content = body.GetProperty("content"), metadata = body.GetProperty("metadata"),
-                        createdAt = body.GetProperty("createdAt"), systemTimestamp = DateTimeOffset.UtcNow,
+                        eventId = "event",
+                        actorId = "agent",
+                        sessionId = "session",
+                        role = "ASSISTANT",
+                        content = body.GetProperty("content"),
+                        metadata = body.GetProperty("metadata"),
+                        createdAt = body.GetProperty("createdAt"),
+                        systemTimestamp = DateTimeOffset.UtcNow,
                     },
                 }),
             };
