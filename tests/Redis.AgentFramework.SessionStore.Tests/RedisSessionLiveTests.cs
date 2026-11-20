@@ -71,11 +71,12 @@ public sealed class RedisSessionLiveTests
     {
         using var connection = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("REDIS_SESSION_STORE_TEST_CONNECTION")!);
         var database = connection.GetDatabase();
-        var store = new RedisAgentSessionStore(database);
+        var options = new RedisAgentSessionStoreOptions { KeyPrefix = "session-store-test:fresh:" };
+        var store = new RedisAgentSessionStore(database, options);
         var agent = RedisAgentSessionStoreTests.CreateAgent();
         var id = Guid.NewGuid().ToString("N");
         var legacyKey = GetKey("agent-framework:sessions:", agent.Id, id);
-        var jsonKey = GetKey(new RedisAgentSessionStoreOptions().KeyPrefix, agent.Id, id);
+        var jsonKey = GetKey(options.KeyPrefix, agent.Id, id);
         Assert.NotEqual(legacyKey, jsonKey);
         try
         {
@@ -88,7 +89,7 @@ public sealed class RedisSessionLiveTests
             Assert.Equal(legacy, (string?)await database.StringGetAsync(legacyKey));
 
             Assert.NotNull(await database.KeyTimeToLiveAsync(legacyKey));
-            var wrongPrefix = new RedisAgentSessionStore(database, new() { KeyPrefix = "agent-framework:sessions:" });
+            var wrongPrefix = new RedisAgentSessionStore(database);
             await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.GetSessionAsync(agent, id).AsTask());
             await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.SaveSessionAsync(agent, id, session).AsTask());
             // EXEC still applies PERSIST after JSON.SET reports a runtime type error.

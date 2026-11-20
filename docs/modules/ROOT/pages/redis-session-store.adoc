@@ -8,7 +8,7 @@ The snapshot includes state the agent serializes: RAM provider IDs and scope, fr
 
 Use Redis 7 or later with JSON commands enabled (for example, Redis Open Source 8 or a JSON-enabled Redis Cloud database). A plain Redis 7 installation without JSON support is not sufficient.
 
-The default prefix is now `agent-framework:sessions:json:`. The DevUI uses `redis-iris-devui:sessions:json:`. These prefixes deliberately start fresh sessions; String snapshots written by `0.1.1-preview` are left untouched and are not migrated or read. If you configured a custom prefix, choose a new one before upgrading. Reusing a key holding a String fails with a Redis type error without replacing it.
+The default prefix is `agent-framework:sessions:`. The DevUI explicitly uses `redis-iris-devui:sessions:json:` to start fresh sessions. String snapshots written by `0.1.1-preview` are not migrated or read. The store default matches the previous String prefix, so applications with existing String snapshots must configure a fresh `KeyPrefix` before upgrading. This also applies to custom prefixes containing String snapshots. Reusing a key holding a String fails with a Redis type error without replacing it.
 
 Documents retain the framework's nested objects and arrays, so Redis JSON commands can inspect individual paths. The store itself still reads and replaces complete snapshots through the framework serializer. It does not introduce incremental writes or concurrency control; external path updates can be overwritten by the next save.
 
