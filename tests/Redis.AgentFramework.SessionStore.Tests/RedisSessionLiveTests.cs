@@ -67,7 +67,7 @@ public sealed class RedisSessionLiveTests
     }
 
     [RedisFact]
-    public async Task FreshPrefixLeavesLegacyStringsUntouchedAndWrongTypesFailClosed()
+    public async Task FreshPrefixLeavesLegacyStringsUntouchedAndTransactionReportsWrongTypes()
     {
         using var connection = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("REDIS_SESSION_STORE_TEST_CONNECTION")!);
         var database = connection.GetDatabase();
@@ -82,14 +82,17 @@ public sealed class RedisSessionLiveTests
             var session = await agent.CreateSessionAsync();
             session.StateBag.SetValue("marker", "legacy");
             var legacy = (await agent.SerializeSessionAsync(session)).GetRawText();
-            await database.StringSetAsync(legacyKey, legacy);
+            await database.StringSetAsync(legacyKey, legacy, TimeSpan.FromMinutes(1));
             Assert.Equal(0, (await store.GetSessionAsync(agent, id)).StateBag.Count);
             await store.SaveSessionAsync(agent, id, session);
             Assert.Equal(legacy, (string?)await database.StringGetAsync(legacyKey));
 
+            Assert.NotNull(await database.KeyTimeToLiveAsync(legacyKey));
             var wrongPrefix = new RedisAgentSessionStore(database, new() { KeyPrefix = "agent-framework:sessions:" });
             await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.GetSessionAsync(agent, id).AsTask());
             await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.SaveSessionAsync(agent, id, session).AsTask());
+            // EXEC still applies PERSIST after JSON.SET reports a runtime type error.
+            Assert.Null(await database.KeyTimeToLiveAsync(legacyKey));
             Assert.Equal(legacy, (string?)await database.StringGetAsync(legacyKey));
         }
         finally
@@ -100,7 +103,7 @@ public sealed class RedisSessionLiveTests
     }
 
     [RedisFact]
-    public async Task DeniedRetentionCommandsDoNotOverwriteTheDocument()
+    public async Task TransactionsWorkWithoutScriptingPermissions()
     {
         var config = ConfigurationOptions.Parse(Environment.GetEnvironmentVariable("REDIS_SESSION_STORE_TEST_CONNECTION")!);
         config.AllowAdmin = true;
@@ -112,7 +115,7 @@ public sealed class RedisSessionLiveTests
         var key = GetKey(prefix, agent.Id, "context");
         try
         {
-            await database.ExecuteAsync("ACL", "SETUSER", user, "on", "nopass", $"~{prefix}*", "+@all", "-pexpire", "-persist");
+            await database.ExecuteAsync("ACL", "SETUSER", user, "on", "nopass", $"~{prefix}*", "+@all", "-eval", "-evalsha");
             var original = await agent.CreateSessionAsync();
             original.StateBag.SetValue("marker", "original");
             var unrestricted = new RedisAgentSessionStore(database, new() { KeyPrefix = prefix });
@@ -126,8 +129,8 @@ public sealed class RedisSessionLiveTests
             foreach (var expiry in new TimeSpan?[] { null, TimeSpan.FromMinutes(1) })
             {
                 var store = new RedisAgentSessionStore(restricted.GetDatabase(), new() { KeyPrefix = prefix, Expiry = expiry });
-                await Assert.ThrowsAsync<RedisServerException>(() => store.SaveSessionAsync(agent, "context", changed).AsTask());
-                Assert.Equal("original", (await unrestricted.GetSessionAsync(agent, "context")).StateBag.GetValue<string>("marker"));
+                await store.SaveSessionAsync(agent, "context", changed);
+                Assert.Equal("changed", (await unrestricted.GetSessionAsync(agent, "context")).StateBag.GetValue<string>("marker"));
             }
         }
         finally

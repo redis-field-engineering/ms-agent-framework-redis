@@ -66,12 +66,12 @@ The RAM identity resolver must reuse the restored RAM session ID while revalidat
 
 == Retention and concurrency
 
-* Each save runs a single-key Lua script that replaces the document root with `JSON.SET` and applies `PEXPIRE` or `PERSIST`. Expiration is refreshed on subsequent saves, not reads. Saving with no expiration removes any previous TTL. The default is no expiration; explicit deletion removes the snapshot only. Retention-command permissions are checked before the document is changed.
+* Each save uses a single-key `MULTI`/`EXEC` transaction to replace the document root with `JSON.SET` and apply `PEXPIRE` or `PERSIST` without interleaving. Expiration is refreshed on subsequent saves, not reads. Saving with no expiration removes any previous TTL. The default is no expiration; explicit deletion removes the snapshot only. The store checks every command reply. Redis transactions do not roll back runtime errors: if a command fails, another queued command can still take effect (for example, changing the TTL after a failed document write).
 * Deleting the snapshot does not delete RAM history or long-term memories. Align expiration and deletion with RAM retention policy.
 * Concurrent saves to the same key are last-writer-wins. The store does not provide a distributed execution lock or optimistic revision checking. Serialize runs for the same conversation when concurrent updates must not overwrite one another.
 * Checkpoint writes are not atomic with RAM event writes or external tool effects. Session persistence is not an exactly-once execution guarantee.
 * Redis errors and invalid serialized data fail the operation instead of silently starting a new conversation. Cancellation stops waiting; an already dispatched Redis write may still complete.
-* Use TLS and application-scoped Redis credentials in production. The store requires `JSON.GET`, `JSON.SET`, `PEXPIRE`, `PERSIST`, and `DEL` on its key prefix, plus `EVAL`/`EVALSHA` for the save script and connection handshake commands. The application owns and disposes the shared multiplexer. Redis durability and eviction configuration determine whether snapshots survive Redis failures or memory pressure.
+* Use TLS and application-scoped Redis credentials in production. The store requires `JSON.GET`, `JSON.SET`, `PEXPIRE`, `PERSIST`, and `DEL` on its key prefix, plus `MULTI`/`EXEC` for the transaction and connection handshake commands. The application owns and disposes the shared multiplexer. Redis durability and eviction configuration determine whether snapshots survive Redis failures or memory pressure.
 
 == DevUI sample
 
@@ -88,4 +88,4 @@ Unit tests use the real Agent Framework serializer with a Redis command double. 
 dotnet test tests/Redis.AgentFramework.SessionStore.Tests
 ----
 
-The integration tests use unique keys and remove their snapshots afterward. The ACL regression also creates and deletes a temporary user, so the test connection needs `ACL SETUSER` and `ACL DELUSER`; application connections do not. CI runs these tests against Redis 8.4 with JSON support.
+The integration tests use unique keys and remove their snapshots afterward. The test verifying saves without scripting permissions also creates and deletes a temporary user, so the test connection needs `ACL SETUSER` and `ACL DELUSER`; application connections do not. CI runs these tests against Redis 8.4 with JSON support.

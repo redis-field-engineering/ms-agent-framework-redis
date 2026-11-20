@@ -136,6 +136,23 @@ public sealed class RedisAgentSessionStoreTests
         await Assert.ThrowsAsync<RedisConnectionException>(() => store.DeleteSessionAsync(agent, "context").AsTask());
     }
 
+    [Theory]
+    [InlineData("JSON.SET")]
+    [InlineData("PEXPIRE")]
+    [InlineData("PERSIST")]
+    public async Task QueuedCommandErrorsAreReportedEvenWhenExecSucceeds(string command)
+    {
+        var database = MemoryDatabase.Create();
+        ((MemoryDatabase)database).FailedCommand = command;
+        var store = new RedisAgentSessionStore(database, new()
+        {
+            Expiry = command == "PEXPIRE" ? TimeSpan.FromMinutes(1) : null,
+        });
+        var agent = CreateAgent();
+        var session = await agent.CreateSessionAsync();
+        await Assert.ThrowsAsync<RedisServerException>(() => store.SaveSessionAsync(agent, "context", session).AsTask());
+    }
+
     [Fact]
     public async Task PreCancelledOperationsDoNotTouchRedis()
     {
@@ -189,6 +206,9 @@ public class MemoryDatabase : DispatchProxy
     public RedisValue LastExpiry { get; private set; }
     public Exception? Failure { get; set; }
     public int Calls { get; private set; }
+    public string? FailedCommand { get; set; }
+    private MemoryDatabase? _transactionOwner;
+    private readonly List<Action> _pending = [];
     public static IDatabase Create() => Create<IDatabase, MemoryDatabase>();
 
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
@@ -197,17 +217,44 @@ public class MemoryDatabase : DispatchProxy
         if (Failure is not null) throw Failure;
         switch (targetMethod!.Name)
         {
+            case "CreateTransaction":
+                var transaction = Create<ITransaction, MemoryDatabase>();
+                ((MemoryDatabase)transaction)._transactionOwner = this;
+                return transaction;
+            case "ExecuteAsync" when _transactionOwner is not null:
+                if (args![0] is not string command)
+                {
+                    foreach (var action in _pending) action();
+                    return Task.FromResult(true);
+                }
+                var queuedArgs = (object[])args[1]!;
+                var reply = new TaskCompletionSource<RedisResult>();
+                _pending.Add(() =>
+                {
+                    if (_transactionOwner.FailedCommand == command)
+                    {
+                        reply.SetException(new RedisServerException("Command failed"));
+                        return;
+                    }
+                    if (command == "JSON.SET")
+                    {
+                        Assert.Equal("$", queuedArgs[1]);
+                        _transactionOwner.Values[queuedArgs[0].ToString()!] = (string)queuedArgs[2];
+                        reply.SetResult(RedisResult.Create((RedisValue)"OK"));
+                    }
+                    else
+                    {
+                        Assert.Contains(command, new[] { "PEXPIRE", "PERSIST" });
+                        _transactionOwner.LastExpiry = command == "PEXPIRE" ? (long)queuedArgs[1] : RedisValue.EmptyString;
+                        reply.SetResult(RedisResult.Create((RedisValue)1));
+                    }
+                });
+                return reply.Task;
             case "ExecuteAsync":
                 Assert.Equal("JSON.GET", args![0]);
                 var commandArgs = (object[])args[1]!;
                 Assert.Equal(".", commandArgs[1]);
                 return Task.FromResult(RedisResult.Create(Values.GetValueOrDefault(commandArgs[0].ToString()!, RedisValue.Null)));
-            case "ScriptEvaluateAsync":
-                var keys = (RedisKey[])args![1]!;
-                var values = (RedisValue[])args[2]!;
-                Values[Assert.Single(keys).ToString()] = values[0];
-                LastExpiry = values[1];
-                return Task.FromResult(RedisResult.Create((RedisValue)"OK"));
             case "KeyDeleteAsync": return Task.FromResult(Values.Remove(((RedisKey)args![0]!).ToString()));
             default: throw new NotSupportedException(targetMethod.Name);
         }
