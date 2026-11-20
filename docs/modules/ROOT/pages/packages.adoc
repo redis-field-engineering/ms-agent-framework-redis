@@ -15,6 +15,14 @@ Preview APIs may change before a stable release.
 |`Redis.Iris.AgentMemory.Management` |Optional Iris control-plane v2 client for registering custom memory types and updating extraction strategies. Add it explicitly in deployment tooling.
 |===
 
+== Changes in 0.1.2-preview
+
+`Redis.AgentFramework.SessionStore` now stores native Redis JSON documents and uses a `MULTI`/`EXEC` transaction to replace the snapshot and apply its expiration. Redis 7 or later with JSON support is required; no Lua scripting permissions are needed.
+
+String snapshots from `0.1.1-preview` are not migrated. The default prefix remains `agent-framework:sessions:`, so applications with existing String snapshots must configure a fresh `KeyPrefix` before upgrading. See xref:redis-session-store.adoc[session storage] for compatibility and transaction failure behavior.
+
+The DevUI sample now loads caller-isolated sessions by conversation ID and saves after successful agent execution, before reporting completion. RAM supplies history without replaying the hosting transcript. DevUI conversation records and response caches remain process-local.
+
 == Supported baselines
 
 [cols="1,3",options="header"]
