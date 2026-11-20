@@ -4,6 +4,8 @@ This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI patte
 
 The hosted agent defaults to Agent Framework's in-memory session store. Set `REDIS_SESSION_CONNECTION_STRING` to use the optional `Redis.AgentFramework.SessionStore` package and persist framework sessions as native Redis JSON documents (Redis 7+ with JSON support). The new `redis-iris-devui:sessions:json:` prefix starts fresh sessions; older String snapshots are not migrated. The RAM identity is stored with the session so restoration reuses its original conversation history. Sessions are partitioned by authenticated identity in multi-user mode. See [session persistence](../../docs/modules/ROOT/pages/redis-session-store.adoc) for retention and concurrency behavior. The custom memory-edit proposal queue remains process-local, and this setting does not persist other hosting resources or add an A2A endpoint.
 
+The Responses integration automatically loads the session by the DevUI conversation ID and saves it after a successful run, before reporting completion. Only new input is passed to the agent; RAM supplies its history. Failed or cancelled runs do not intentionally save partial state. The sample requires a conversation ID (created automatically by DevUI) and does not support background runs or `previous_response_id` chains. Hosting conversation records and response/transcript caches remain process-local, so this setting alone does not restore the UI conversation list after restarting the host.
+
 ## Code layout
 
 Start with [`Program.cs`](Program.cs): it handles command-line exports, composes the host, and maps routes. The implementation is grouped by responsibility:
@@ -11,6 +13,7 @@ Start with [`Program.cs`](Program.cs): it handles command-line exports, composes
 | Location | Responsibility |
 | --- | --- |
 | `Configuration/SampleOptions.cs` | Environment settings, defaults, and startup validation |
+| `Hosting/` | Responses request capture and automatic agent session load/run/save |
 | `Agent/` | Travel assistant registration, RAM/session identity, and authorized Context Retriever access |
 | `Authentication/` | Local user directory, cookie/OIDC setup, validated claims, and delegated tokens |
 | `Endpoints/` | Sign-in/sign-out, owner-scoped RAM inspection and cleanup, and context inspection |
@@ -174,7 +177,7 @@ issuer and audience and enable ownership enforcement. The sample forwards the
 validated access token alongside the RAM agent key and uses Cognito `sub` as the
 owner of new personal memories. See the [security model](../../SECURITY.md#delegated-ram-user-authentication).
 
-OIDC authentication tickets and Agent Framework sessions are process-local in this sample. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
+OIDC authentication tickets are process-local in this sample. Agent Framework snapshots are also process-local unless `REDIS_SESSION_CONNECTION_STRING` is configured; hosting conversation records remain process-local either way. The raw OAuth tokens stay in the server-side ticket store; the browser receives only an opaque HTTP-only cookie. The cookie expires with the 15-minute Cognito token, after which the user signs in again. Remove `DEVUI_AUTH_MODE` (or set it back to `token`) to return to the normal local-token flow.
 
 ## Run the Docker observability demo
 

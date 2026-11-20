@@ -44,6 +44,8 @@ builder.AddAIAgent("travel-agent", (services, name) =>
 
 Register an `AgentIsolationKeyProvider` that resolves the authenticated tenant/user boundary. `WithRedisSessionStore` preserves the framework's default isolation decorator. Disable it with `withIsolation: false` only for a trusted single-user application. The continuation ID alone does not authorize access.
 
+Registration selects the backing store; it does not itself load or save a session. The pinned hosting package does not invoke the registered store from its built-in Responses executor. An application must own that lifecycle (as in the direct example below or the DevUI adapter described later). Changes to `session.StateBag` remain local until `SaveSessionAsync` is called.
+
 Keep agent configuration and serialization compatible when restoring snapshots. Keys hash the stable `agent.Id` and opaque, potentially isolation-scoped continuation ID. Different agents, callers, and application prefixes use separate records; raw user and conversation IDs are not included in Redis keys.
 
 == Restore from an A2A context ID
@@ -77,7 +79,11 @@ The RAM identity resolver must reuse the restored RAM session ID while revalidat
 
 Set `REDIS_SESSION_CONNECTION_STRING` to enable Redis storage. Without it, the sample uses the in-memory store. Redis storage uses the `redis-iris-devui:sessions:json:` prefix, no expiration by default, and the existing caller isolation configuration.
 
-The sample exposes OpenAI-compatible endpoints, not A2A. Enabling Redis persists framework sessions; it does not add an A2A endpoint or persist every other hosting resource.
+The sample's `DevUISessionAgent` adapter loads the caller-isolated snapshot using the DevUI conversation ID, runs the agent with only the current input, then saves the updated session after successful execution. Both streaming and non-streaming HTTP responses use this lifecycle. The save completes before the hosting converter emits `response.completed`; a load, run, or save failure produces a failed response. Disconnects cancel execution, and failed or cancelled runs do not intentionally checkpoint partial state. RAM events and tool effects already written are not rolled back.
+
+`UseDevUISessionPersistence` captures the current turn before the hosting executor prepends its UI transcript. RAM remains responsible for agent history, avoiding duplicate ingestion of past messages. The sample requires a conversation created through `/v1/conversations`, as DevUI does automatically, and rejects background runs and `previous_response_id` chains. It retains the framework's existing response retrieval, streaming events, and conversation item endpoints.
+
+The sample exposes OpenAI-compatible endpoints, not A2A. The hosting conversation registry, UI transcript/response cache, authentication tickets, and custom memory-edit proposal queue remain process-local. Redis preserves the agent snapshot, but does not make the DevUI conversation list survive a host restart: reopening a previous UI conversation also requires persistence of those hosting resources. This change does not add an A2A endpoint.
 
 == Validation
 
@@ -87,5 +93,7 @@ Unit tests use the real Agent Framework serializer with a Redis command double. 
 ----
 dotnet test tests/Redis.AgentFramework.SessionStore.Tests
 ----
+
+DevUI endpoint tests issue real HTTP requests through the standard Responses and Conversations routes, verifying snapshot restoration, caller isolation, current-turn-only input, and failure/cancellation behavior. They use a serializing in-memory session store; Redis command behavior is covered separately by the store tests.
 
 The integration tests use unique keys and remove their snapshots afterward. The test verifying saves without scripting permissions also creates and deletes a temporary user, so the test connection needs `ACL SETUSER` and `ACL DELUSER`; application connections do not. CI runs these tests against Redis 8.4 with JSON support.

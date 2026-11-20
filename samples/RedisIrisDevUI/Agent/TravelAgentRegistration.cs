@@ -77,7 +77,7 @@ internal static class TravelAgentRegistration
             });
         });
 
-        var hostedAgent = builder.AddAIAgent(AgentName, (services, name) =>
+        var hostedAgent = builder.AddAIAgent(AgentName, (services, name) => new DevUISessionAgent(
             services.GetRequiredService<IChatClient>().AsAIAgent(new ChatClientAgentOptions
             {
                 Id = name,
@@ -104,7 +104,9 @@ internal static class TravelAgentRegistration
             })
             .AsBuilder()
             .UseOpenTelemetry(TelemetrySourceName)
-            .Build(services));
+            .Build(services),
+            services.GetRequiredKeyedService<AgentSessionStore>(name),
+            services.GetRequiredService<IHttpContextAccessor>()));
 
         if (settings.SessionRedisConnection is { } connectionString)
         {

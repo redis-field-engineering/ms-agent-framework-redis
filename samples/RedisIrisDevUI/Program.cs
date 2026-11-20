@@ -38,6 +38,7 @@ if (settings.AuthenticationRequired)
     app.UseAuthentication();
     app.UseAuthorization();
 }
+app.UseDevUISessionPersistence();
 app.MapTravelAuthentication(settings);
 app.UseStaticFiles();
 app.MapDevUI();

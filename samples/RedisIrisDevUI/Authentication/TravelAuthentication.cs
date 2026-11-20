@@ -104,7 +104,7 @@ internal sealed record InspectedAccessToken(string Token, JsonElement Header, Js
 
 /// <summary>
 /// Keeps authentication tickets, including raw OAuth tokens, in this process. The browser cookie contains only
-/// an opaque lookup key. This matches the sample's existing process-local Agent Framework session store.
+/// an opaque lookup key. Authentication tickets remain process-local even when Redis agent sessions are enabled.
 /// </summary>
 internal sealed class InMemoryAuthenticationTicketStore : ITicketStore
 {
