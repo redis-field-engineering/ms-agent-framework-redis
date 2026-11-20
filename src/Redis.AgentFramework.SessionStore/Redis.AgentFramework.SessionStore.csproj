@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Redis-backed session persistence for Microsoft Agent Framework hosting.</Description>
+    <Description>Redis JSON session persistence for Microsoft Agent Framework hosting.</Description>
     <PackageId>Redis.AgentFramework.SessionStore</PackageId>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>

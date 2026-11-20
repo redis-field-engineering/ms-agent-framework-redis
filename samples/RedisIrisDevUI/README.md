@@ -2,7 +2,7 @@
 
 This sample adapts Microsoft Agent Framework's official ASP.NET Core DevUI pattern to the Redis Iris integration. It provides an interactive browser chat, owner-scoped RAM inspection and cleanup endpoints, and an annotated structured-context model for a travel agency.
 
-The hosted agent defaults to Agent Framework's in-memory session store. Set `REDIS_SESSION_CONNECTION_STRING` to use the optional `Redis.AgentFramework.SessionStore` package and persist serialized framework sessions directly in Redis. The RAM identity is stored with the session so restoration reuses its original conversation history. Sessions are partitioned by authenticated identity in multi-user mode. See [session persistence](../../docs/modules/ROOT/pages/redis-session-store.adoc) for retention and concurrency behavior. The custom memory-edit proposal queue remains process-local, and this setting does not persist other hosting resources or add an A2A endpoint.
+The hosted agent defaults to Agent Framework's in-memory session store. Set `REDIS_SESSION_CONNECTION_STRING` to use the optional `Redis.AgentFramework.SessionStore` package and persist framework sessions as native Redis JSON documents (Redis 7+ with JSON support). The new `redis-iris-devui:sessions:json:` prefix starts fresh sessions; older String snapshots are not migrated. The RAM identity is stored with the session so restoration reuses its original conversation history. Sessions are partitioned by authenticated identity in multi-user mode. See [session persistence](../../docs/modules/ROOT/pages/redis-session-store.adoc) for retention and concurrency behavior. The custom memory-edit proposal queue remains process-local, and this setting does not persist other hosting resources or add an A2A endpoint.
 
 ## Code layout
 

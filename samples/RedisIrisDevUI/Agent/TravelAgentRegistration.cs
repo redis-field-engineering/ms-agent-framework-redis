@@ -109,7 +109,7 @@ internal static class TravelAgentRegistration
         if (settings.SessionRedisConnection is { } connectionString)
         {
             builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(connectionString));
-            hostedAgent.WithRedisSessionStore(options => options.KeyPrefix = "redis-iris-devui:sessions:",
+            hostedAgent.WithRedisSessionStore(options => options.KeyPrefix = "redis-iris-devui:sessions:json:",
                 withIsolation: settings.AuthenticationRequired);
         }
         else

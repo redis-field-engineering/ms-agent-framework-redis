@@ -6,7 +6,7 @@ Use `Redis.Iris.AgentFramework` for the Microsoft Agent Framework integration. I
 
 Custom memory attribute filters are available in Iris mode through the SDK and owner-scoped agent recall. Add `Redis.Iris.AgentMemory.Management` separately to register server-side types through the Iris control-plane v2 API. See [the guide](docs/modules/ROOT/pages/custom-memory-types.adoc) and [runnable example](samples/RedisIrisCustomMemory).
 
-Add `Redis.AgentFramework.SessionStore` separately for a Redis-backed `AgentSessionStore`. It persists serialized framework state by continuation ID (including an A2A context ID) and works alongside RAM history and recall. It uses a direct Redis connection, and does not add a Redis dependency to the RAM client. See [session persistence](docs/modules/ROOT/pages/redis-session-store.adoc).
+Add `Redis.AgentFramework.SessionStore` separately for a Redis-backed `AgentSessionStore`. It stores framework state as native Redis JSON documents by continuation ID (including an A2A context ID) and works alongside RAM history and recall. It uses a direct Redis connection, and does not add a Redis dependency to the RAM client. See [session persistence](docs/modules/ROOT/pages/redis-session-store.adoc).
 
 Start with the [documentation site](https://redis-field-engineering.github.io/ms-agent-framework-redis/) or read the [standalone .NET quickstart source](docs/modules/ROOT/pages/quickstart.adoc).
 

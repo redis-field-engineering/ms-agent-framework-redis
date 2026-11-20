@@ -113,9 +113,9 @@ public sealed class RedisAgentSessionStoreTests
         var agent = CreateAgent();
         var session = await agent.CreateSessionAsync();
         await store.SaveSessionAsync(agent, "context", session);
-        Assert.Equal(new Expiration(TimeSpan.FromMinutes(5)), ((MemoryDatabase)database).LastExpiry);
+        Assert.Equal((RedisValue)300_000, ((MemoryDatabase)database).LastExpiry);
         await new RedisAgentSessionStore(database).SaveSessionAsync(agent, "context", await agent.CreateSessionAsync());
-        Assert.Equal(Expiration.Default, ((MemoryDatabase)database).LastExpiry);
+        Assert.Equal(RedisValue.EmptyString, ((MemoryDatabase)database).LastExpiry);
         Assert.Throws<ArgumentOutOfRangeException>(() => new RedisAgentSessionStore(database, new() { Expiry = TimeSpan.Zero }));
     }
 
@@ -186,7 +186,7 @@ public sealed class RedisAgentSessionStoreTests
 public class MemoryDatabase : DispatchProxy
 {
     public Dictionary<string, RedisValue> Values { get; } = new();
-    public Expiration LastExpiry { get; private set; }
+    public RedisValue LastExpiry { get; private set; }
     public Exception? Failure { get; set; }
     public int Calls { get; private set; }
     public static IDatabase Create() => Create<IDatabase, MemoryDatabase>();
@@ -195,15 +195,20 @@ public class MemoryDatabase : DispatchProxy
     {
         Calls++;
         if (Failure is not null) throw Failure;
-        var key = ((RedisKey)args![0]!).ToString();
         switch (targetMethod!.Name)
         {
-            case "StringGetAsync": return Task.FromResult(Values.GetValueOrDefault(key, RedisValue.Null));
-            case "StringSetAsync":
-                Values[key] = (RedisValue)args[1]!;
-                LastExpiry = (Expiration)args[2]!;
-                return Task.FromResult(true);
-            case "KeyDeleteAsync": return Task.FromResult(Values.Remove(key));
+            case "ExecuteAsync":
+                Assert.Equal("JSON.GET", args![0]);
+                var commandArgs = (object[])args[1]!;
+                Assert.Equal(".", commandArgs[1]);
+                return Task.FromResult(RedisResult.Create(Values.GetValueOrDefault(commandArgs[0].ToString()!, RedisValue.Null)));
+            case "ScriptEvaluateAsync":
+                var keys = (RedisKey[])args![1]!;
+                var values = (RedisValue[])args[2]!;
+                Values[Assert.Single(keys).ToString()] = values[0];
+                LastExpiry = values[1];
+                return Task.FromResult(RedisResult.Create((RedisValue)"OK"));
+            case "KeyDeleteAsync": return Task.FromResult(Values.Remove(((RedisKey)args![0]!).ToString()));
             default: throw new NotSupportedException(targetMethod.Name);
         }
     }

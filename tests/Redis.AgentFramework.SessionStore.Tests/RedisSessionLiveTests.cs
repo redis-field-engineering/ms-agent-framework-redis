@@ -1,5 +1,8 @@
 // Copyright (c) Redis, Inc.
 
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Redis.AgentFramework.SessionStore;
 using StackExchange.Redis;
 using Xunit;
@@ -23,7 +26,17 @@ public sealed class RedisSessionLiveTests
         {
             var session = await first.GetSessionAsync(agent, "context");
             session.StateBag.SetValue("provider", "durable");
+            session.StateBag.SetValue("nested", new { Values = new[] { 1, 2 }, Enabled = true });
             await first.SaveSessionAsync(agent, "context", session);
+            var database = firstConnection.GetDatabase();
+            var key = GetKey(options.KeyPrefix, agent.Id, "context");
+            Assert.Equal("object", (string?)await database.ExecuteAsync("JSON.TYPE", key, "."));
+            var expected = await agent.SerializeSessionAsync(session);
+            var stored = (string)(await database.ExecuteAsync("JSON.GET", key, "."))!;
+            Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected.GetRawText()), JsonNode.Parse(stored)));
+            await database.ExecuteAsync("JSON.SET", key, "$.stale", "true");
+            await first.SaveSessionAsync(agent, "context", session);
+            Assert.Equal("[]", (string?)await database.ExecuteAsync("JSON.GET", key, "$.stale"));
             Assert.Equal("durable", (await second.GetSessionAsync(recreated, "context")).StateBag.GetValue<string>("provider"));
             await second.DeleteSessionAsync(recreated, "context");
             Assert.Equal(0, (await first.GetSessionAsync(agent, "context")).StateBag.Count);
@@ -33,6 +46,18 @@ public sealed class RedisSessionLiveTests
             await expiring.SaveSessionAsync(agent, "expires", session);
             await Task.Delay(400);
             Assert.Equal(0, (await second.GetSessionAsync(recreated, "expires")).StateBag.Count);
+
+            var retainedKey = GetKey(options.KeyPrefix, agent.Id, "context");
+            var retained = new RedisAgentSessionStore(database, new() { KeyPrefix = options.KeyPrefix, Expiry = TimeSpan.FromMinutes(1) });
+            await retained.SaveSessionAsync(agent, "context", session);
+            Assert.NotNull(await database.KeyTimeToLiveAsync(retainedKey));
+            await database.KeyExpireAsync(retainedKey, TimeSpan.FromSeconds(5));
+            await retained.GetSessionAsync(agent, "context");
+            Assert.True(await database.KeyTimeToLiveAsync(retainedKey) <= TimeSpan.FromSeconds(5));
+            await retained.SaveSessionAsync(agent, "context", session);
+            Assert.True(await database.KeyTimeToLiveAsync(retainedKey) > TimeSpan.FromSeconds(30));
+            await second.SaveSessionAsync(agent, "context", session);
+            Assert.Null(await database.KeyTimeToLiveAsync(retainedKey));
         }
         finally
         {
@@ -40,6 +65,80 @@ public sealed class RedisSessionLiveTests
             await first.DeleteSessionAsync(agent, "expires");
         }
     }
+
+    [RedisFact]
+    public async Task FreshPrefixLeavesLegacyStringsUntouchedAndWrongTypesFailClosed()
+    {
+        using var connection = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("REDIS_SESSION_STORE_TEST_CONNECTION")!);
+        var database = connection.GetDatabase();
+        var store = new RedisAgentSessionStore(database);
+        var agent = RedisAgentSessionStoreTests.CreateAgent();
+        var id = Guid.NewGuid().ToString("N");
+        var legacyKey = GetKey("agent-framework:sessions:", agent.Id, id);
+        var jsonKey = GetKey(new RedisAgentSessionStoreOptions().KeyPrefix, agent.Id, id);
+        Assert.NotEqual(legacyKey, jsonKey);
+        try
+        {
+            var session = await agent.CreateSessionAsync();
+            session.StateBag.SetValue("marker", "legacy");
+            var legacy = (await agent.SerializeSessionAsync(session)).GetRawText();
+            await database.StringSetAsync(legacyKey, legacy);
+            Assert.Equal(0, (await store.GetSessionAsync(agent, id)).StateBag.Count);
+            await store.SaveSessionAsync(agent, id, session);
+            Assert.Equal(legacy, (string?)await database.StringGetAsync(legacyKey));
+
+            var wrongPrefix = new RedisAgentSessionStore(database, new() { KeyPrefix = "agent-framework:sessions:" });
+            await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.GetSessionAsync(agent, id).AsTask());
+            await Assert.ThrowsAsync<RedisServerException>(() => wrongPrefix.SaveSessionAsync(agent, id, session).AsTask());
+            Assert.Equal(legacy, (string?)await database.StringGetAsync(legacyKey));
+        }
+        finally
+        {
+            await database.KeyDeleteAsync(legacyKey);
+            await database.KeyDeleteAsync(jsonKey);
+        }
+    }
+
+    [RedisFact]
+    public async Task DeniedRetentionCommandsDoNotOverwriteTheDocument()
+    {
+        var config = ConfigurationOptions.Parse(Environment.GetEnvironmentVariable("REDIS_SESSION_STORE_TEST_CONNECTION")!);
+        config.AllowAdmin = true;
+        using var connection = await ConnectionMultiplexer.ConnectAsync(config);
+        var database = connection.GetDatabase();
+        var user = $"session-test-{Guid.NewGuid():N}";
+        var prefix = $"{user}:";
+        var agent = RedisAgentSessionStoreTests.CreateAgent();
+        var key = GetKey(prefix, agent.Id, "context");
+        try
+        {
+            await database.ExecuteAsync("ACL", "SETUSER", user, "on", "nopass", $"~{prefix}*", "+@all", "-pexpire", "-persist");
+            var original = await agent.CreateSessionAsync();
+            original.StateBag.SetValue("marker", "original");
+            var unrestricted = new RedisAgentSessionStore(database, new() { KeyPrefix = prefix });
+            await unrestricted.SaveSessionAsync(agent, "context", original);
+
+            config.User = user;
+            config.Password = null;
+            using var restricted = await ConnectionMultiplexer.ConnectAsync(config);
+            var changed = await agent.CreateSessionAsync();
+            changed.StateBag.SetValue("marker", "changed");
+            foreach (var expiry in new TimeSpan?[] { null, TimeSpan.FromMinutes(1) })
+            {
+                var store = new RedisAgentSessionStore(restricted.GetDatabase(), new() { KeyPrefix = prefix, Expiry = expiry });
+                await Assert.ThrowsAsync<RedisServerException>(() => store.SaveSessionAsync(agent, "context", changed).AsTask());
+                Assert.Equal("original", (await unrestricted.GetSessionAsync(agent, "context")).StateBag.GetValue<string>("marker"));
+            }
+        }
+        finally
+        {
+            await database.KeyDeleteAsync(key);
+            await database.ExecuteAsync("ACL", "DELUSER", user);
+        }
+    }
+
+    private static string GetKey(string prefix, string agentId, string contextId) =>
+        prefix + Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new[] { agentId, contextId })));
 }
 
 public sealed class RedisFactAttribute : FactAttribute

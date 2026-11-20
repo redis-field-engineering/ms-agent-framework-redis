@@ -6,7 +6,7 @@ namespace Redis.AgentFramework.SessionStore;
 public sealed class RedisAgentSessionStoreOptions
 {
     /// <summary>Gets or sets the application-specific key prefix.</summary>
-    public string KeyPrefix { get; set; } = "agent-framework:sessions:";
+    public string KeyPrefix { get; set; } = "agent-framework:sessions:json:";
 
     /// <summary>Gets or sets the expiration applied on each save. Null retains sessions until deleted.</summary>
     /// <remarks>Reads do not refresh expiration. Match retention to the application's external history store.</remarks>

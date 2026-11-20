@@ -8,7 +8,7 @@ using StackExchange.Redis;
 
 namespace Redis.AgentFramework.SessionStore;
 
-/// <summary>Persists complete serialized AgentSession snapshots directly in Redis.</summary>
+/// <summary>Persists complete AgentSession snapshots as Redis JSON documents.</summary>
 /// <remarks>
 /// The caller owns the shared Redis connection. Register through WithRedisSessionStore to enable
 /// framework caller isolation. Direct use requires an already authorized, scoped sessionStoreId.
@@ -17,6 +17,23 @@ namespace Redis.AgentFramework.SessionStore;
 /// </remarks>
 public sealed class RedisAgentSessionStore : AgentSessionStore
 {
+    // One key keeps the document and retention update atomic, including on Redis Cluster.
+    // Check retention permissions before writing: Lua errors do not roll back earlier commands.
+    private const string SaveScript = """
+        local retention
+        if ARGV[2] == '' then
+            retention = {'PERSIST', KEYS[1]}
+        else
+            retention = {'PEXPIRE', KEYS[1], ARGV[2]}
+        end
+        if not redis.acl_check_cmd(unpack(retention)) then
+            return redis.error_reply('NOPERM session retention command is not permitted')
+        end
+        local result = redis.call('JSON.SET', KEYS[1], '$', ARGV[1])
+        redis.call(unpack(retention))
+        return result
+        """;
+
     private readonly IDatabase _database;
     private readonly string _keyPrefix;
     private readonly TimeSpan? _expiry;
@@ -43,10 +60,10 @@ public sealed class RedisAgentSessionStore : AgentSessionStore
         cancellationToken.ThrowIfCancellationRequested();
         var state = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        // SET with expiration commits the value and its retention together.
-        var expiry = _expiry is { } ttl ? new Expiration(ttl) : Expiration.Default;
-        var saved = await _database.StringSetAsync(key, state.GetRawText(), expiry).WaitAsync(cancellationToken).ConfigureAwait(false);
-        if (!saved) throw new InvalidOperationException("Redis did not save the agent session.");
+        RedisValue expiry = _expiry is { } ttl ? (long)Math.Ceiling(ttl.TotalMilliseconds) : RedisValue.EmptyString;
+        var saved = await _database.ScriptEvaluateAsync(SaveScript, [key], [state.GetRawText(), expiry])
+            .WaitAsync(cancellationToken).ConfigureAwait(false);
+        if ((string?)saved != "OK") throw new InvalidOperationException("Redis did not save the agent session.");
     }
 
     /// <inheritdoc />
@@ -54,7 +71,8 @@ public sealed class RedisAgentSessionStore : AgentSessionStore
     {
         var key = GetKey(agent, sessionStoreId);
         cancellationToken.ThrowIfCancellationRequested();
-        var state = await _database.StringGetAsync(key).WaitAsync(cancellationToken).ConfigureAwait(false);
+        // The legacy root path returns the document itself, without JSONPath's result-array wrapper.
+        var state = await _database.ExecuteAsync("JSON.GET", key, ".").WaitAsync(cancellationToken).ConfigureAwait(false);
         if (state.IsNull)
             return await agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
