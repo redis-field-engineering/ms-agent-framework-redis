@@ -8,7 +8,7 @@ using StackExchange.Redis;
 
 namespace Redis.AgentFramework.SessionStore;
 
-/// <summary>Persists complete serialized AgentSession snapshots directly in Redis.</summary>
+/// <summary>Persists complete AgentSession snapshots as Redis JSON documents.</summary>
 /// <remarks>
 /// The caller owns the shared Redis connection. Register through WithRedisSessionStore to enable
 /// framework caller isolation. Direct use requires an already authorized, scoped sessionStoreId.
@@ -43,10 +43,17 @@ public sealed class RedisAgentSessionStore : AgentSessionStore
         cancellationToken.ThrowIfCancellationRequested();
         var state = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        // SET with expiration commits the value and its retention together.
-        var expiry = _expiry is { } ttl ? new Expiration(ttl) : Expiration.Default;
-        var saved = await _database.StringSetAsync(key, state.GetRawText(), expiry).WaitAsync(cancellationToken).ConfigureAwait(false);
-        if (!saved) throw new InvalidOperationException("Redis did not save the agent session.");
+        var transaction = _database.CreateTransaction();
+        var saved = transaction.ExecuteAsync("JSON.SET", key, "$", state.GetRawText());
+        var retained = _expiry is { } ttl
+            ? transaction.ExecuteAsync("PEXPIRE", key, (long)Math.Ceiling(ttl.TotalMilliseconds))
+            : transaction.ExecuteAsync("PERSIST", key);
+        var committed = transaction.ExecuteAsync();
+        // EXEC success alone does not imply every queued command succeeded.
+        // Await all replies: runtime errors do not roll back other transaction commands.
+        await Task.WhenAll(committed, saved, retained).WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (!await committed.ConfigureAwait(false) || (string?)await saved.ConfigureAwait(false) != "OK")
+            throw new InvalidOperationException("Redis did not save the agent session.");
     }
 
     /// <inheritdoc />
@@ -54,7 +61,8 @@ public sealed class RedisAgentSessionStore : AgentSessionStore
     {
         var key = GetKey(agent, sessionStoreId);
         cancellationToken.ThrowIfCancellationRequested();
-        var state = await _database.StringGetAsync(key).WaitAsync(cancellationToken).ConfigureAwait(false);
+        // The legacy root path returns the document itself, without JSONPath's result-array wrapper.
+        var state = await _database.ExecuteAsync("JSON.GET", key, ".").WaitAsync(cancellationToken).ConfigureAwait(false);
         if (state.IsNull)
             return await agent.CreateSessionAsync(cancellationToken).ConfigureAwait(false);
 
